@@ -89,7 +89,7 @@ class DischmaSet():
             a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
             used_for_comp = a0_passed_th and fog_passed_th  # one bool, whether this img was used for composite image generation
             img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
-            self.is_foggy.append(img_is_foggy)
+            self.is_foggy.append(int(img_is_foggy))
         print('lists have same length? (should be T): ', len(self.file_list) == len(self.is_foggy))
     
 
