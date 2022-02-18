@@ -12,9 +12,13 @@ EPOCHS = 3
 dset_train = DischmaSet()
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 
+# set device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 model = MyNet()
+model.to(device)
+
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr= LEARNING_RATE)
 
@@ -24,7 +28,10 @@ for epoch in range(EPOCHS):
     train_loss = 0.0
     model.train()
 
-    for x, y in dloader_train:
+    for x, y in dloader_train:  # x,y are already moved to device in dataloader
+        x = x.to(device)
+        y = y.to(device)
+
         print(x.shape)
         print(y.shape)
         print(x.dtype)
