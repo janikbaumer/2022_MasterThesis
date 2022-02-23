@@ -89,7 +89,6 @@ class DischmaSet():
         # create a label list of booleans (ordered the same as list with file names)
 
         # not done with dicts (keys cannot be accessed with indices (used for getitem method))
-
         count_list_deletes = 0
         for raw_img_name in self.file_list_all:  # raw_img_name: e.g. '20211230160501.jpg'
             A0_img, fog_idx_img = get_indices(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
@@ -137,5 +136,9 @@ class DischmaSet():
 
 
 # test what happens (call init function)
-x = DischmaSet()
+x = DischmaSet(station='Stillberg', camera='3')
+nfog, nclear = x.get_balancedness()
+
+print('nfog, nclear: ', nfog, nclear)
+print('n total (labeled images): ', nfog+nclear)
 
