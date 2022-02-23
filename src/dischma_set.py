@@ -20,17 +20,22 @@ def check_files_second_format(lst):
 
 # non optimal, txt files are read n_rows times (once for each raw image)
 # based on a given image name (.jpg), get corresponding A0 and fog index
+# if corresponding txt file exists (that notes which imgs were used for composite image generation)
+# else return 0, 0
 def get_indices(path, raw_img):
     day = raw_img[0:8]  # get yyyymmdd from yyyymmddHHMMSS.jpg
     path_txtfile = f'{path}/{day}.txt'
     if not os.path.isfile(path_txtfile):
         # todo: go look in fog_index_all.mat file if there is an entry for this day
-        print('txt file for this day does not exist - TODO (skip this day!!!)')
+        a_0, fog_index = None, None
     else:  # if txt file exists for that day
         with open(path_txtfile) as f:
             df = pd.read_csv(f, delim_whitespace=True, index_col='#filename')
-            a_0 = df.loc[raw_img]['A0']
-            fog_index = df.loc[raw_img]['fog_index']
+            try:
+                a_0 = df.loc[raw_img]['A0']
+                fog_index = df.loc[raw_img]['fog_index']
+            except KeyError:  # may happen if txt file exists, but does not contain indices for all images of that day
+                a_0, fog_index = None, None
     return a_0, fog_index
 
 def get_cam_thresholds(path):
@@ -54,15 +59,15 @@ def check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_
 
 class DischmaSet():
     
-    def __init__(self, root='../datasets/dataset_devel/') -> None:
+    def __init__(self, root='../datasets/dataset_complete/', station='Buelenberg', camera='1') -> None:
         
         # create list of file names (raw images)
         # loop over all stations / cams (for devel, only choose BB1)
         # todo: when looping, consider that not all stations have 3 cameras
         # todo: when looping, maybe do nested list or change list name (depending on cam/station) -> consider that at same time, multiple images from diff cams exist
         
-        STATION = 'Buelenberg'
-        CAM = '1'
+        STATION = station
+        CAM = camera
 
         self.DOWNSCALE_FACTOR = 10  # 1 for no downsampling, else height and width is (each) downscaled by this factor
 
@@ -73,10 +78,11 @@ class DischmaSet():
         A0_optim, fog_idx_optim, A0_far0, fog_idx_far0 = get_cam_thresholds(self.PATH_COMPOSITE)
 
         # create list of filenames (raw images, sorted)
-        self.file_list = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if isfile(os.path.join(self.PATH_RAW_IMAGE, f))])
-        self.img_used_for_comp_list = []
+        self.file_list_all = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if f.endswith('.jpg') and isfile(os.path.join(self.PATH_RAW_IMAGE, f))])
         self.is_foggy = []
-        #check_files_second_format(file_list)
+        self.file_list_valid = []
+        #check_files_second_format(file_list_all)
+
 
         # for each jpg file, get indices, compare to camera thresholds
         # and check whether img was used for composite image generation
@@ -84,20 +90,21 @@ class DischmaSet():
 
         # not done with dicts (keys cannot be accessed with indices (used for getitem method))
 
-        for raw_img_name in self.file_list:
+        count_list_deletes = 0
+        for raw_img_name in self.file_list_all:  # raw_img_name: e.g. '20211230160501.jpg'
             A0_img, fog_idx_img = get_indices(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
-            a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
-            used_for_comp = a0_passed_th and fog_passed_th  # one bool, whether this img was used for composite image generation
-            img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
-            self.is_foggy.append(int(img_is_foggy))
-        print('lists have same length? (should be T): ', len(self.file_list) == len(self.is_foggy))
+            if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
+                a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
+                used_for_comp = a0_passed_th and fog_passed_th  # one bool, whether this img was used for composite image generation
+                img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
+                self.is_foggy.append(int(img_is_foggy))
+                self.file_list_valid.append(raw_img_name)
     
-
     def __len__(self):
         """
-        returns the number of samples in our dataset
+        returns the number of VALID samples in our dataset (where not both a0 and fog_idx are None)
         """
-        return len(self.file_list)
+        return len(self.file_list_valid)
 
 
     def __getitem__(self, idx):
@@ -106,7 +113,7 @@ class DischmaSet():
         """
 
         # given idx, get image with filename belonging to this specific index
-        self.img_name = self.file_list[idx]
+        self.img_name = self.file_list_valid[idx]
         self.path_img = f'{self.PATH_RAW_IMAGE}/{self.img_name}'
         
         # read and downscale image
@@ -121,6 +128,12 @@ class DischmaSet():
         label = self.is_foggy[idx]
 
         return image, label
+    
+    def get_balancedness(self):
+        n_foggy = self.is_foggy.count(1)  # nmbr of images classified as foggy
+        n_clear = self.is_foggy.count(0)
+
+        return n_foggy, n_clear
 
 
 # test what happens (call init function)
