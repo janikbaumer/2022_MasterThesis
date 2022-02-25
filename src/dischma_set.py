@@ -10,7 +10,7 @@ def check_files_second_format(lst):
     wrong_file = False
     for ele in lst:
         # check that all files are in format [yyyymmddHHMMSS], not [yyyymmdd]
-        if len(ele) != 18 and ele[-1:-4] == '.jpgd':  # 18: yyyymmddHHMMSS.jpg
+        if len(ele) != 18 and ele[-1:-4] == '.jpg':  # 18: yyyymmddHHMMSS.jpg
             print('at least one file is not in correct format, should be: [yyyymmddHHMMSS].jpg')
             wrong_file = True
     if wrong_file == False:
@@ -26,12 +26,12 @@ def get_indices(path, raw_img):
     day = raw_img[0:8]  # get yyyymmdd from yyyymmddHHMMSS.jpg
     path_txtfile = f'{path}/{day}.txt'
     if not os.path.isfile(path_txtfile):
-        # todo: go look in fog_index_all.mat file if there is an entry for this day
+        # TODO: go look in fog_index_all.mat file if there is an entry for this day
         a_0, fog_index = None, None
     else:  # if txt file exists for that day
         with open(path_txtfile) as f:
             df = pd.read_csv(f, delim_whitespace=True, index_col='#filename')
-            try:
+            try:  # TODO Mo, 28.02.2022 - do not check for whole image (contains also .jpg), but only check for substring (without extension!)
                 a_0 = df.loc[raw_img]['A0']
                 fog_index = df.loc[raw_img]['fog_index']
             except KeyError:  # may happen if txt file exists, but does not contain indices for all images of that day
@@ -78,7 +78,7 @@ class DischmaSet():
         A0_optim, fog_idx_optim, A0_far0, fog_idx_far0 = get_cam_thresholds(self.PATH_COMPOSITE)
 
         # create list of filenames (raw images, sorted)
-        self.file_list_all = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if f.endswith('.jpg') and isfile(os.path.join(self.PATH_RAW_IMAGE, f))])
+        self.file_list_all = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if (f.endswith('.jpg') or f.endswith('.png')) and isfile(os.path.join(self.PATH_RAW_IMAGE, f))])
         self.is_foggy = []
         self.file_list_valid = []
         #check_files_second_format(file_list_all)
@@ -90,7 +90,7 @@ class DischmaSet():
 
         # not done with dicts (keys cannot be accessed with indices (used for getitem method))
         count_list_deletes = 0
-        for raw_img_name in self.file_list_all:  # raw_img_name: e.g. '20211230160501.jpg'
+        for raw_img_name in self.file_list_all:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
             A0_img, fog_idx_img = get_indices(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
             if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
                 a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
@@ -135,10 +135,10 @@ class DischmaSet():
         return n_foggy, n_clear
 
 
-# test what happens (call init function)
-x = DischmaSet(station='Stillberg', camera='3')
-nfog, nclear = x.get_balancedness()
+if __name__=='__main__':
+    # test what happens (call init function)
+    x = DischmaSet(station='Stillberg', camera='3')
+    nfog, nclear = x.get_balancedness()
 
-print('nfog, nclear: ', nfog, nclear)
-print('n total (labeled images): ', nfog+nclear)
-
+    print('nfog, nclear: ', nfog, nclear)
+    print('n total (labeled images): ', nfog+nclear)
