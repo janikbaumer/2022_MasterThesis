@@ -4,27 +4,27 @@ from PIL import Image
 import torchvision
 from torchvision.transforms import functional as F
 from torchvision.utils import save_image
-import torch 
+import torch
+from torchvision.transforms.transforms import ToTensor, ToPILImage
+import torch.nn.functional as F
 
-def ds_img(path_old, path_old_ds, img_name, factor=10):
-    image = torchvision.io.read_image(path=path_old)
-    image = image.float()  # convert uint8 to float32
-
-    # write unsampled image to disk (to new destination)
-    #save_image(tensor=image, fp='/scratch2/unsampled.jpg')  # save as jpg
-    #torch.save(obj=image, f=f'/scratch2/unsampled.pkl')  # save as pkl
-    #save_image(tensor=image, fp='/scratch2/unsampled.png')  # save as jpg
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-    shp = image.shape  # torch.Size([3, 6000, 4000])
-    shp = tuple(image.shape[-2:])  # (6000, 4000)
-    shp_new = tuple(int(x/factor) for x in shp)
-    image_ds = F.resize(img=image, size=shp_new)
+def ds_img(path_old, path_old_ds, factor=10):
+    cvt_pil_to_tens = ToTensor()
+    cvt_tens_to_pil = ToPILImage()
+    
+    img_pil = Image.open(fp=path_old)
+    img_tensor = cvt_pil_to_tens(img_pil)  # shape 3,4000,6000, values in range [0,1]
+    img_tensor = img_tensor[None, ...]  # add first dim (needed for F.interpolate), new shape 1,3,4000,6000
+    img_tensor_ds = F.interpolate(input=img_tensor, scale_factor=(1/factor, 1/factor))  # shape 1, 3, 4000/factor, 6000/factor
+    img_tensor_ds_squeezed = torch.squeeze(input=img_tensor_ds, dim=0)  # remove first dim if it is one, new shape 3, 4000/factor, 6000/factor
+    img_ds = cvt_tens_to_pil(img_tensor_ds_squeezed)
+    img_ds.save(fp=path_old_ds)  # format is inferred from extension (png)
 
-    # save new image
-    #save_image(tensor=image_ds, fp='/scratch2/sampled.jpg')
-    #torch.save(obj=image_ds, f='/scratch2/sampled.pkl')
-    save_image(tensor=image_ds, fp=path_old_ds)
+
 
 
 def downsample_composites(ds_factor=10):
@@ -64,11 +64,68 @@ def downsample_composites(ds_factor=10):
                 path_full_new_img_ds = f'{path_cam_x_station_new}/{file_with_png_extension}'
 
                 # downsample image
-                ds_img(path_old=path_full_old_img, path_old_ds=path_full_old_img_ds, img_name=file_without_jpg_extenstion, factor=10)
+                ds_img(path_old=path_full_old_img, path_old_ds=path_full_old_img_ds, factor=10)
 
                 # move downsampled image to dir dataset_downsampled
                 shutil.move(src=path_full_old_img_ds, dst=path_full_new_img_ds)
 
         print(f'{CamX_station} images DONE.')
 
-# downsample_composites()
+
+
+
+def downsample_DischmaCams(ds_factor=10):
+    """
+    function creates a subsampled dataset from the directory dataset_complete
+    this fct considering the subdir 'DischmaCams'
+    directory 'dataset_downsampled' with all subdirs has to be created manually
+    to get same dir sub-structure, follow: https://stackoverflow.com/questions/4073969/copy-folder-structure-without-files-from-one-location-to-another
+    !!! only run code once (to one specific directory), no checking for duplicates (for efficiency reason)!
+    """
+    
+    PATH_DISCHMACAMS_COMPLETE = '../datasets/dataset_complete/DischmaCams'
+    PATH_DISCHMACAMS_DOWNSAMPLED = '../datasets/dataset_downsampled/DischmaCams'
+
+    print('Start downscaling DischmaCams images...')
+
+    for station in os.listdir(PATH_DISCHMACAMS_COMPLETE):
+        path_station_old = f'{PATH_DISCHMACAMS_COMPLETE}/{station}'        
+        path_station_new = f'{PATH_DISCHMACAMS_DOWNSAMPLED}/{station}'
+
+        for camera in os.listdir(path_station_old):
+            print(f'Start downscaling {station}_{camera} images...')  # {station}_{camera} = e.g. 'Buelenberg_1'
+
+            path_station_camera_old = f'{path_station_old}/{camera}'
+            path_station_camera_new = f'{path_station_new}/{camera}'
+            
+
+            for file in os.listdir(path_station_camera_old):  # file: mostly txt and jpg files
+                
+                path_full_old_noimg = f'{path_station_camera_old}/{file}'
+                path_full_new_noimg = f'{path_station_camera_new}/{file}'
+
+                # copy all non .jpg files directly (.txt files etc) (w\o downsampling)
+                if not (file.endswith('.jpg') or file.endswith('.png')):
+                    shutil.copyfile(src=path_full_old_noimg, dst=path_full_new_noimg)
+                
+                if file.endswith('.jpg'):
+                    file_without_jpg_extenstion = file[:-4]
+                    file_with_png_extension = f'{file_without_jpg_extenstion}.png'
+
+                    path_full_old_img = f'{path_station_camera_old}/{file}'
+                    path_full_old_img_ds = f'{path_station_camera_old}/{file_with_png_extension}'
+                    path_full_new_img_ds = f'{path_station_camera_new}/{file_with_png_extension}'
+
+
+                # downsample image
+                ds_img(path_old=path_full_old_img, path_old_ds=path_full_old_img_ds, factor=10)
+
+                # move downsampled image to dir dataset_downsampled
+                shutil.move(src=path_full_old_img_ds, dst=path_full_new_img_ds)
+
+        print(f'{station} images DONE.')
+
+
+
+downsample_DischmaCams()
+downsample_composites()
