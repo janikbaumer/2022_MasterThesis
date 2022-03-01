@@ -23,6 +23,7 @@ def check_files_second_format(lst):
 # if corresponding txt file exists (that notes which imgs were used for composite image generation)
 # else return 0, 0
 def get_indices(path, raw_img):
+    raw_img_jpg = raw_img[:-4]+'.jpg'  #  in case compressed (.png) files were used
     day = raw_img[0:8]  # get yyyymmdd from yyyymmddHHMMSS.jpg
     path_txtfile = f'{path}/{day}.txt'
     if not os.path.isfile(path_txtfile):
@@ -32,8 +33,8 @@ def get_indices(path, raw_img):
         with open(path_txtfile) as f:
             df = pd.read_csv(f, delim_whitespace=True, index_col='#filename')
             try:  # TODO Mo, 28.02.2022 - do not check for whole image (contains also .jpg), but only check for substring (without extension!)
-                a_0 = df.loc[raw_img]['A0']
-                fog_index = df.loc[raw_img]['fog_index']
+                a_0 = df.loc[raw_img_jpg]['A0']
+                fog_index = df.loc[raw_img_jpg]['fog_index']
             except KeyError:  # may happen if txt file exists, but does not contain indices for all images of that day
                 a_0, fog_index = None, None
     return a_0, fog_index
@@ -69,7 +70,7 @@ class DischmaSet():
         STATION = station
         CAM = camera
 
-        self.DOWNSCALE_FACTOR = 10  # 1 for no downsampling, else height and width is (each) downscaled by this factor
+        self.DOWNSCALE_FACTOR = 1  # 1 for no downsampling, else height and width is (each) downscaled by this factor
 
         self.PATH_RAW_IMAGE = root + f'DischmaCams/{STATION}/{CAM}'
         self.PATH_COMPOSITE = root + f'Composites/Cam{CAM}_{STATION}'
@@ -108,7 +109,7 @@ class DischmaSet():
 
     def __getitem__(self, idx):
         """
-        returns a data sample from the dataset (this fct will be called <batch size> times)
+        returns a data sample from the dataset (this fct will be called <batch size> times, in every loop)
         """
 
         # given idx, get image with filename belonging to this specific index
@@ -125,6 +126,7 @@ class DischmaSet():
         
         # get label (True if img is foggy, resp. img was not used for composite image generation)
         label = self.is_foggy[idx]
+        # label = float(label)
 
         return image, label
     
@@ -141,4 +143,4 @@ if __name__=='__main__':
     nfog, nclear = x.get_balancedness()
 
     print('nfog, nclear: ', nfog, nclear)
-    print('n total (labeled images): ', nfog+nclear)
+    print('n total (labeled images): ', nfog + nclear)
