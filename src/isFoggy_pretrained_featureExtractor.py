@@ -34,9 +34,9 @@ torch.manual_seed(42)
 
 BATCH_SIZE = 8
 LEARNING_RATE = 0.01
-EPOCHS = 3
+EPOCHS = 15
 N_CLASSES = 2
-TRAIN_SPLIT = 0.2
+TRAIN_SPLIT = 0.8
 
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -69,9 +69,10 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
         running_loss = 0.0  # loss (to be updated during loop)
         running_corrects = 0  # correct labels (to be updated during loop)
         
-        print('start training...')
-        loop = 0
         train_loss, epoch_loss = 0, 0
+
+        loop = 0
+        print('start training...')
         for x, y in dloader_train:  # x,y are already moved to device in dataloader
             loop += 1
 
@@ -131,9 +132,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr= LEARNING_RATE)  # TODO ev a
 
 train_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=None, num_epochs=EPOCHS)
 
-
-
-
 # ev add (TODO)
 # Decay LR by a factor of 0.1 every 7 epochs
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
+
