@@ -13,6 +13,7 @@ from torchvision import models
 from torch.utils.data import random_split
 from torch.optim import lr_scheduler
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
+import json
 
 print('imports done')
 
@@ -48,7 +49,7 @@ def get_train_val_split(dset_full):
     len_full = len(dset_full)
     len_train = int(TRAIN_SPLIT*len_full)
     len_val = len_full - len_train
-    dset_train, dset_val = random_split(dset_bb1, [len_train, len_val])  # Split Pytorch tensor
+    dset_train, dset_val = random_split(dset_full, [len_train, len_val])  # Split Pytorch tensor
     return dset_train, dset_val
 
 def print_grid(x,y, batchsize):
@@ -63,6 +64,7 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
     print('start TRAINING model...')
     model = model.train()
     train_since = time()
+    all_stats = {}
 
     for epoch in range(num_epochs):
         print(f'{epoch}/{num_epochs}')
@@ -71,7 +73,6 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
         running_loss, running_corrects = 0.0, 0  # loss (to be updated during loop)
         train_loss, epoch_loss = 0, 0
         all_y_true, all_y_pred = [], []  # after a complete epoch, these two lists will have same length as dset_train
-
         loop = 0
 
         print('start training...')
@@ -87,7 +88,7 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
             # plot at nth loop
             if loop == 26:
                 print_grid(x,y, BATCH_SIZE)
-            """    
+            """
 
             optimizer.zero_grad()  # gradients do not have to be kept from last step
 
@@ -112,6 +113,7 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
             all_y_pred.extend(y_pred)
 
             epoch_loss += loss.item() * x.size(0)
+            train_loss += loss.item() * x.size(0)
 
 
 
@@ -122,9 +124,35 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
         print('epoch loss = ', epoch_loss/len(dloader_train))
 
         cm, accuracy, precision, recall, f1 = get_and_print_stats(yt=all_y_true, yp=all_y_pred, mode='train')
+
+        all_stats[f'epoch_{epoch}'] = {}
+
+        all_stats[f'epoch_{epoch}']['epoch_loss'] = epoch_loss/len(dloader_train)
+        
+        # array([[a,b],
+        #        [c,d]])
+        # 
+        # --> [[a,b],[c,d]]
+        # cm is a np.array, convert to list of lists to store in dict (cm can be recreated by cm = np.array(cm.tolist()) )
+        all_stats[f'epoch_{epoch}']['cm'] = cm.tolist()
+
+        all_stats[f'epoch_{epoch}']['accuracy'] = float(accuracy)
+        all_stats[f'epoch_{epoch}']['precision'] = float(precision)
+        all_stats[f'epoch_{epoch}']['recall'] = float(recall)
+        all_stats[f'epoch_{epoch}']['f1'] = float(f1)
+
+        print()
+    train_end = time()
+    training_time = train_end - train_since
+    print('training time in seconds: ', training_time)
+    all_stats['training_time'] = training_time
+
     # saving model
     torch.save(obj=model, f=PATH_MODEL)
-    print('training time in seconds: ', time() - train_since)
+
+    # save dict with statistics
+    with open(PATH_STATS, 'w') as fp:
+        json.dump(all_stats, fp)
 
 
 def val_model(model, dloader, criterion):
@@ -203,18 +231,20 @@ EPOCHS = int(args.epochs)
 TRAIN_SPLIT = float(args.train_split)
 
 N_CLASSES = 2
+PATH_DATASET = f'../datasets/dataset_downsampled_devel/'
 PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}'
+PATH_STATS = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}.json'
 
 
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # create datasets and dataloaders
-dset_bb1 = DischmaSet(root='../datasets/dataset_downsampled_devel/', station='Buelenberg', camera=1)
+dset = DischmaSet(root=PATH_DATASET, station=STATION, camera=CAM)
 print(f'Dischma set {STATION}{CAM} created.')
-dset_bb1_train, dset_bb1_val = get_train_val_split(dset_bb1)
-dloader_train = DataLoader(dataset=dset_bb1_train, batch_size=BATCH_SIZE)
-dloader_val = DataLoader(dataset=dset_bb1_val, batch_size=BATCH_SIZE)
+dset_train, dset_val = get_train_val_split(dset)
+dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
+dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
 model = models.resnet18(pretrained=True)
 
@@ -231,8 +261,8 @@ model = model.to(device)
 
 
 #criterion = nn.CrossEntropyLoss(reduction='mean')
-criterion = nn.BCELoss(reduction='mean')
-optimizer = torch.optim.Adam(model.parameters(), lr= LEARNING_RATE)  # TODO ev add momentum
+criterion = nn.BCELoss(reduction='mean')  # TODO: add weights (inversely proportional to occurance) - nfog, nclear
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev add momentum
 
 
 """
@@ -243,5 +273,7 @@ exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)  
 """
 
 train_model(model=model, dloader=dloader_train, criterion=criterion, optimizer=optimizer, scheduler=None, num_epochs=EPOCHS)
+print()
+print()
+print()
 val_model(model=model, dloader=dloader_val, criterion=criterion)
-
