@@ -131,10 +131,10 @@ class DischmaSet():
         return image, label
     
     def get_balancedness(self):
-        n_foggy = self.is_foggy.count(1)  # nmbr of images classified as foggy
         n_clear = self.is_foggy.count(0)
+        n_foggy = self.is_foggy.count(1)  # nmbr of images classified as foggy
 
-        return n_foggy, n_clear
+        return n_clear, n_foggy
 
 
 if __name__=='__main__':
