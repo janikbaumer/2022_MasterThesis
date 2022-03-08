@@ -14,6 +14,8 @@ from torch.utils.data import random_split
 from torch.optim import lr_scheduler
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
 import json
+import os
+
 
 print('imports done')
 
@@ -56,7 +58,7 @@ def print_grid(x,y, batchsize):
     x = x.cpu()
     y = y.cpu()
     print(y)
-    grid_img = torchvision.utils.make_grid(x, nrow=batchsize/2, normalize=True)
+    grid_img = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
     plt.imshow(grid_img.permute(1, 2, 0))
     plt.show()
 
@@ -95,9 +97,10 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
             # TODO: ev add: track history only if in train  --  with torch.set_grad_enabled(phase == 'train'):
 
             pred_probab = model(x)  # fwd pass
+            pred_probab_class_0 = pred_probab[:, 0]
             pred_probab_class_1 = pred_probab[:, 1]
             prediction_binary = pred_probab.argmax(dim=1).float()
-
+            # note: if changed to pred_probab_class_0, then also weights tensor given to criterion must be changed !!!
             loss = criterion(pred_probab_class_1, y)  # loss is calculated batchsize times, and then averaged
             loss.backward()  # backprop
             optimizer.step()  # update params
@@ -128,10 +131,10 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
         all_stats[f'epoch_{epoch}'] = {}
 
         all_stats[f'epoch_{epoch}']['epoch_loss'] = epoch_loss/len(dloader_train)
-        
+
         # array([[a,b],
         #        [c,d]])
-        # 
+        #
         # --> [[a,b],[c,d]]
         # cm is a np.array, convert to list of lists to store in dict (cm can be recreated by cm = np.array(cm.tolist()) )
         all_stats[f'epoch_{epoch}']['cm'] = cm.tolist()
@@ -151,7 +154,7 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
     torch.save(obj=model, f=PATH_MODEL)
 
     # save dict with statistics
-    with open(PATH_STATS, 'w') as fp:
+    with open(PATH_STATS_TRAIN, 'w') as fp:
         json.dump(all_stats, fp)
 
 
@@ -159,6 +162,7 @@ def val_model(model, dloader, criterion):
     print('start VALIDATING the model...')
     model = model.eval()
     val_since = time()
+    all_stats = {}
 
     print('-' * 10)
 
@@ -176,6 +180,11 @@ def val_model(model, dloader, criterion):
             y = y.to(device)
             y = y.float()
             loop += 1
+
+            """
+            if loop == 26:
+                print_grid(x, y, BATCH_SIZE)
+            """
 
             pred_probab = model(x)  # fwd pass
             pred_probab_class_1 = pred_probab[:, 1]
@@ -200,7 +209,23 @@ def val_model(model, dloader, criterion):
 
         print('epoch loss = ', epoch_loss/len(dloader_train))
 
-        cm, accuracy, precision, recall, f1 = get_and_print_stats(yt=all_y_true, yp=all_y_pred, mode='val')
+    cm, accuracy, precision, recall, f1 = get_and_print_stats(yt=all_y_true, yp=all_y_pred, mode='val')
+    all_stats['validation'] = {}
+    all_stats[f'validation']['cm'] = cm.tolist()
+    all_stats[f'validation']['accuracy'] = float(accuracy)
+    all_stats[f'validation']['precision'] = float(precision)
+    all_stats[f'validation']['recall'] = float(recall)
+    all_stats[f'validation']['f1'] = float(f1)
+
+    val_end = time()
+    validation_time = val_end - val_since
+    print('validation time in seconds: ', validation_time)
+    all_stats['validation_time'] = validation_time
+
+    # save dict with statistics
+    with open(PATH_STATS_VAL, 'w') as fp:
+        json.dump(all_stats, fp)
+
 
     print('validation time in seconds: ', time() - val_since)
 
@@ -220,6 +245,7 @@ parser.add_argument('--epochs', help='number of training epochs')
 parser.add_argument('--train_split', help='train split')
 parser.add_argument('--station', help='station')
 parser.add_argument('--cam', help='camera number')
+parser.add_argument('--weighted', help='whether loss function should be weighted (inversely proportional to occurance')
 
 args = parser.parse_args()
 
@@ -229,13 +255,16 @@ BATCH_SIZE = int(args.batch_size)
 LEARNING_RATE = float(args.lr)
 EPOCHS = int(args.epochs)
 TRAIN_SPLIT = float(args.train_split)
+WEIGHTED = args.weighted
 
 N_CLASSES = 2
-PATH_DATASET = f'../datasets/dataset_downsampled_devel/'
-PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}'
-PATH_STATS = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}.json'
+PATH_DATASET = f'../datasets/dataset_downsampled/'
+PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
+PATH_STATS_TRAIN = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}.json'
+PATH_STATS_VAL = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_validation.json'
 
-
+print('path exists? ', os.path.exists(PATH_MODEL))
+print(PATH_MODEL)
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -261,7 +290,17 @@ model = model.to(device)
 
 
 #criterion = nn.CrossEntropyLoss(reduction='mean')
-criterion = nn.BCELoss(reduction='mean')  # TODO: add weights (inversely proportional to occurance) - nfog, nclear
+n_class_0, n_class_1 = dset.get_balancedness()
+n_tot = n_class_0 + n_class_1
+w0, w1 = n_class_1/n_tot, n_class_0/n_tot
+weights = torch.Tensor([w0, w1]).to(device)
+
+if WEIGHTED == 'False':
+    criterion = nn.BCELoss(reduction='mean', weight=None)
+elif WEIGHTED == 'True':
+    criterion = nn.BCELoss(reduction='mean', weight=weights[1])  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
+
+
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev add momentum
 
 
@@ -272,7 +311,13 @@ optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
 """
 
-train_model(model=model, dloader=dloader_train, criterion=criterion, optimizer=optimizer, scheduler=None, num_epochs=EPOCHS)
+if os.path.exists(PATH_MODEL) == True:
+    print('trained model already exists, loading model...')
+    del model
+    model = torch.load(PATH_MODEL)
+else:
+    train_model(model=model, dloader=dloader_train, criterion=criterion, optimizer=optimizer, scheduler=None, num_epochs=EPOCHS)
+
 print()
 print()
 print()
