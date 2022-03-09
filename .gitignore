@@ -137,3 +137,4 @@ dmypy.json
 # project related
 src/stats/
 src/models/
+src/wandb

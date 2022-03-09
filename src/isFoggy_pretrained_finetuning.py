@@ -4,7 +4,7 @@ import argparse
 import matplotlib.pyplot as plt
 
 from time import time
-from numpy import datetime_as_string
+from numpy import datetime_as_string, rec
 from dischma_set import DischmaSet
 from torch.utils.data import DataLoader
 from binary_classifier import MyNet # , Binary_Classifier
@@ -15,6 +15,7 @@ from torch.optim import lr_scheduler
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
 import json
 import os
+import wandb
 
 
 print('imports done')
@@ -125,7 +126,7 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
                 train_loss = 0
 
         print('epoch loss = ', epoch_loss/len(dloader_train))
-
+        
         cm, accuracy, precision, recall, f1 = get_and_print_stats(yt=all_y_true, yp=all_y_pred, mode='train')
 
         all_stats[f'epoch_{epoch}'] = {}
@@ -143,6 +144,11 @@ def train_model(model, dloader, criterion, optimizer, scheduler, num_epochs):
         all_stats[f'epoch_{epoch}']['precision'] = float(precision)
         all_stats[f'epoch_{epoch}']['recall'] = float(recall)
         all_stats[f'epoch_{epoch}']['f1'] = float(f1)
+        
+        wandb.log({"epoch_loss": epoch_loss/len(dloader_train)})
+        wandb.log({'train accuracy' : accuracy})
+        wandb.log({'train precision' : precision})
+        wandb.log({'train recall' : recall})
 
         print()
     train_end = time()
@@ -203,7 +209,7 @@ def val_model(model, dloader, criterion):
 
             all_y_true.extend(y_true)
             all_y_pred.extend(y_pred)
-
+            
             epoch_loss += loss.item() * x.size(0)
 
 
@@ -217,6 +223,11 @@ def val_model(model, dloader, criterion):
     all_stats[f'validation']['recall'] = float(recall)
     all_stats[f'validation']['f1'] = float(f1)
 
+    wandb.log({"val epoch_loss": epoch_loss/len(dloader_train)})
+    wandb.log({'val accuracy' : accuracy})
+    wandb.log({'val precision' : precision})
+    wandb.log({'val recall' : recall})
+
     val_end = time()
     validation_time = val_end - val_since
     print('validation time in seconds: ', validation_time)
@@ -225,9 +236,6 @@ def val_model(model, dloader, criterion):
     # save dict with statistics
     with open(PATH_STATS_VAL, 'w') as fp:
         json.dump(all_stats, fp)
-
-
-    print('validation time in seconds: ', time() - val_since)
 
 
 ################## REPRODUCIBILITY ##################
@@ -262,6 +270,14 @@ PATH_DATASET = f'../datasets/dataset_downsampled/'
 PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
 PATH_STATS_TRAIN = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}.json'
 PATH_STATS_VAL = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_validation.json'
+
+wandb.config = {
+  "learning_rate": LEARNING_RATE,
+  "epochs": EPOCHS,
+  "batch_size": BATCH_SIZE
+}
+wandb.init(project="isFoggy_pretrained_finetuning", entity="jbaumer")
+
 
 print('path exists? ', os.path.exists(PATH_MODEL))
 print(PATH_MODEL)
