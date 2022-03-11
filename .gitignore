@@ -138,3 +138,5 @@ dmypy.json
 src/stats/
 src/models/
 src/wandb
+src/fig_check_manually
+src/fig_check_manually.zip
