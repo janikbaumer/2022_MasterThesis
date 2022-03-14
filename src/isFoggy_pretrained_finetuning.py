@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import json
 import os
 import wandb
+import ast
 
 from time import time
 import numpy as np
@@ -185,28 +186,29 @@ torch.manual_seed(42)  # works for CPU and CUDA
 ############ ARGPARSERS, GLOBAL VARIABLES ############
 
 parser = argparse.ArgumentParser(description='Run pretrained finetuning.')
-parser.add_argument('--batch_size', help='batch size')
-parser.add_argument('--lr', help='learning rate')
-parser.add_argument('--epochs', help='number of training epochs')
-parser.add_argument('--train_split', help='train split')
-parser.add_argument('--station', help='station')
-parser.add_argument('--cam', help='camera number')
+parser.add_argument('--batch_size', type=int, help='batch size')
+parser.add_argument('--lr', type=float, help='learning rate')
+parser.add_argument('--epochs', type=int, help='number of training epochs')
+parser.add_argument('--train_split', type=float, help='train split')
+parser.add_argument('--stations_cam', help='list of stations with camera number, separated with underscore (e.g. Buelenberg_1')
+#parser.add_argument('--cam', help='camera number')
 parser.add_argument('--weighted', help='how to weight the classes (manual: as given in script / Auto: Inversely proportional to occurance / False: not at all')
 parser.add_argument('--path_dset', help='path to used dataset ')
 args = parser.parse_args()
 
-# TODO: add types (in parser.add_argument)
-STATION = args.station
-CAM = int(args.cam)
-BATCH_SIZE = int(args.batch_size)
-LEARNING_RATE = float(args.lr)
-EPOCHS = int(args.epochs)
-TRAIN_SPLIT = float(args.train_split)
+BATCH_SIZE = args.batch_size
+LEARNING_RATE = args.lr
+EPOCHS = args.epochs
+TRAIN_SPLIT = args.train_split
 WEIGHTED = args.weighted
 PATH_DATASET = args.path_dset
 
+STATIONS_CAM_STR = args.stations_cam
+STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
+STATIONS_CAM_LST = ast.literal_eval(STATIONS_CAM_STR)
+STATION_CAM = STATIONS_CAM_LST[0]  # here: TODO maybe loop over all avaible cams/stations from 
+STATION, CAM = STATION_CAM.split('_')
 
-# may not be changed
 N_CLASSES = 2
 PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
 PATH_STATS_TRAIN = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}.json'
@@ -235,7 +237,7 @@ w0, w1 = n_class_1/n_tot, n_class_0/n_tot
 if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
-    weights = torch.Tensor([0.2, 0.8]).to(device)  # w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
+    weights = torch.Tensor([0.3, 0.7]).to(device)  # w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
     weights = torch.Tensor([w0, w1]).to(device)
 
