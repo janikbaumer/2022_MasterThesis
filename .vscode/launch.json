@@ -16,11 +16,12 @@
             [
                 "--batch_size", "8",
                 "--lr", "0.01",
-                "--epochs", "15",
+                "--epochs", "1",
                 "--train_split", "0.8",
-                "--station", "Sattel",
-                "--cam", "1",
-                "--weighted", "True"
+                "--stations", "['Buelenberg_1', 'Buelenberg_2']",  //comma separated, single elements in string quotes !
+                //"--cam", "1",
+                "--weighted", "Manual",
+                "--path_dset", "../datasets/dataset_downsampled_devel/"
             ]
         }
     ]
