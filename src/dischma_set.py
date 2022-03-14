@@ -140,7 +140,7 @@ class DischmaSet():
 if __name__=='__main__':
     # test what happens (call init function)
     x = DischmaSet(station='Stillberg', camera='3')
-    nfog, nclear = x.get_balancedness()
+    nclear, nfog = x.get_balancedness()
 
     print('nfog, nclear: ', nfog, nclear)
     print('n total (labeled images): ', nfog + nclear)
