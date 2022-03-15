@@ -178,10 +178,10 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     torch.save(obj=model, f=PATH_MODEL)
 
 
-################## REPRODUCIBILITY ##################
-
+# REPRODUCIBILITY 
 torch.seed()  # only for CPU
 torch.manual_seed(42)  # works for CPU and CUDA
+
 
 ############ ARGPARSERS, GLOBAL VARIABLES ############
 
@@ -196,6 +196,12 @@ parser.add_argument('--weighted', help='how to weight the classes (manual: as gi
 parser.add_argument('--path_dset', help='path to used dataset ')
 args = parser.parse_args()
 
+# logging
+wandb.init(project="isFoggy_pretrained_finetuning", entity="jbaumer", config=args)
+
+# set device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 BATCH_SIZE = args.batch_size
 LEARNING_RATE = args.lr
 EPOCHS = args.epochs
@@ -205,24 +211,23 @@ PATH_DATASET = args.path_dset
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
-STATIONS_CAM_LST = ast.literal_eval(STATIONS_CAM_STR)
-STATION_CAM = STATIONS_CAM_LST[0]  # here: TODO maybe loop over all avaible cams/stations from 
-STATION, CAM = STATION_CAM.split('_')
+STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
+
+# following done in class DischmaSet
+# STATION_CAM = STATIONS_CAM_LST[0]  # here: TODO maybe loop over all avaible cams/stations from 
+# STATION, CAM = STATION_CAM.split('_')
+
 
 N_CLASSES = 2
-PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
-PATH_STATS_TRAIN = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}.json'
-PATH_STATS_VAL = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_validation.json'
-
-# logging
-wandb.init(project="isFoggy_pretrained_finetuning", entity="jbaumer", config=args)
-
-# set device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
+PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
+#PATH_STATS_TRAIN = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}.json'
+#PATH_STATS_VAL = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_validation.json'
 
 # create datasets and dataloaders
-dset = DischmaSet(root=PATH_DATASET, station=STATION, camera=CAM)
-print(f'Dischma set {STATION}{CAM} created.')
+#####dset = DischmaSet(root=PATH_DATASET, station=STATION, camera=CAM)
+dset = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
+print(f'Dischma set with data from {STATIONS_CAM_LST} created.')
 dset_train, dset_val = get_train_val_split(dset)
 len_dset_train, len_dset_val = len(dset_train), len(dset_val)
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
