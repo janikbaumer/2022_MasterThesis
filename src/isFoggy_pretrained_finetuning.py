@@ -150,6 +150,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     loop_loss = 0
 
             if phase == 'train':
+                scheduler.step()
                 epoch_loss = running_loss/len_dset_train
             elif phase == 'val':
                 epoch_loss = running_loss/len_dset_val
@@ -242,7 +243,7 @@ w0, w1 = n_class_1/n_tot, n_class_0/n_tot
 if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
-    weights = torch.Tensor([0.3, 0.7]).to(device)  # w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
+    weights = torch.Tensor([0.3, 0.7]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
     weights = torch.Tensor([w0, w1]).to(device)
 
@@ -260,8 +261,9 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev ad
 # Observe that only parameters of final layer are being optimized as
 # opposed to before.
 optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
 """
+exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
+
 
 # train all layers (should already be default)
 for param in model.parameters():
@@ -273,4 +275,4 @@ model.fc = nn.Linear(n_features, N_CLASSES)
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
 model = model.to(device)
-train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=None, num_epochs=EPOCHS)
+train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
