@@ -150,8 +150,9 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     loop_loss = 0
 
             if phase == 'train':
-                scheduler.step()
                 epoch_loss = running_loss/len_dset_train
+                if scheduler is not None:
+                    scheduler.step()
             elif phase == 'val':
                 epoch_loss = running_loss/len_dset_val
 
@@ -195,6 +196,8 @@ parser.add_argument('--stations_cam', help='list of stations with camera number,
 #parser.add_argument('--cam', help='camera number')
 parser.add_argument('--weighted', help='how to weight the classes (manual: as given in script / Auto: Inversely proportional to occurance / False: not at all')
 parser.add_argument('--path_dset', help='path to used dataset ')
+parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler')
+
 args = parser.parse_args()
 
 # logging
@@ -209,6 +212,7 @@ EPOCHS = args.epochs
 TRAIN_SPLIT = args.train_split
 WEIGHTED = args.weighted
 PATH_DATASET = args.path_dset
+LR_SCHEDULER = args.lr_scheduler
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
@@ -262,8 +266,10 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev ad
 # opposed to before.
 optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
 """
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
-
+if LR_SCHEDULER == 'True':
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
+elif LR_SCHEDULER == 'False':
+    exp_lr_scheduler = None
 
 # train all layers (should already be default)
 for param in model.parameters():
