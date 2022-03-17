@@ -21,7 +21,6 @@ def open_json(fname):
         nested_dict = json.load(f)
     return nested_dict
 
-
 nested_dict = open_json(PATH_STATS)
 
 for key in nested_dict.keys():
