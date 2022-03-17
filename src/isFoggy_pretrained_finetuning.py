@@ -75,14 +75,13 @@ def print_grid(x,y, batchsize, loop):
     grid_img = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
     plt.title(f'loop: {loop}\n{y_reshaped[0]}\n{y_reshaped[1]}')
     plt.imshow(grid_img.permute(1, 2, 0))
-    plt.savefig(f'fig_check_manually/grid_loop_{loop}')
+    plt.savefig(f'stats/fig_check_manually/grid_loop_{loop}')
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
 
     for epoch in range(num_epochs):
         print()
-        # print(f'Epoch {epoch+1}/{num_epochs}')
         print('-' * 10)
 
         # in each epoch, do training and validation
@@ -97,7 +96,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 dloader = dloader_val
 
             running_loss = 0.0  # loss (to be updated during loop)
-            # running_corrects = 0
             loop, loop_loss, epoch_loss = 0, 0, 0
             cm_tot = np.zeros((2,2), dtype='int64')
 
@@ -106,6 +104,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 x = x.to(device)
                 y = y.to(device)
 
+                # plot some batches
                 #if loop < 200 and loop%10 == 0:
                 #    print_grid(x,y, BATCH_SIZE, loop)
 
@@ -126,11 +125,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 running_loss += loss.item() * x.size(0)  # loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg
                 loop_loss += loss.item() * x.size(0)
 
-                # running_corrects += torch.sum(prediction_binary == y).item()  #  correct predictions (of this batch)
-                # not needed...running_corrects += torch.sum(pred_binary == y).item()  #  correct predictions (of this batch)
-
                 y_true = y.cpu().tolist()
-                # y_pred = prediction_binary.cpu().tolist()
                 y_pred = pred_binary.cpu().tolist()
 
                 # array([[a, b],
@@ -162,19 +157,21 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             wandb.log({f'{phase} loss' : epoch_loss})
             wandb.log({f'{phase} accuracy' : acc})
             wandb.log({f'{phase} precision (isFoggy is True)' : prec_isFoggyIsTrue})
-            wandb.log({f'{phase} recall (isFoggy is True)' : rec_isFoggyIsTrue})  # this should be high !!! (to catch all images)
+            wandb.log({f'{phase} recall (isFoggy is True)' : rec_isFoggyIsTrue})  # this should be high !!! (to catch all (foggy) images)
             wandb.log({f'{phase} F1-score (isFoggy is True)' : f1_isFoggyIsTrue})
 
-            # acc, prec_isFoggyIsFalse, rec_isFoggyIsFalse, f1_isFoggyIsFalse = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=0)
-            # wandb.log({f'{phase} precision (isFoggy is False)' : prec_isFoggyIsFalse})
-            # wandb.log({f'{phase} recall (isFoggy is False)' : rec_isFoggyIsFalse})            
-            # wandb.log({f'{phase} F1-score (isFoggy is False)' : f1_isFoggyIsFalse})
+            """
+            acc, prec_isFoggyIsFalse, rec_isFoggyIsFalse, f1_isFoggyIsFalse = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=0)
+            wandb.log({f'{phase} precision (isFoggy is False)' : prec_isFoggyIsFalse})
+            wandb.log({f'{phase} recall (isFoggy is False)' : rec_isFoggyIsFalse})            
+            wandb.log({f'{phase} F1-score (isFoggy is False)' : f1_isFoggyIsFalse})
+            """
 
         print()
 
     time_end = time()
     time_elapsed = time_end - time_start
-    print(f'training and validation competed in {time_elapsed} seconds.')
+    print(f'training and validation completed in {time_elapsed} seconds.')
 
     # saving model
     torch.save(obj=model, f=PATH_MODEL)
@@ -193,7 +190,6 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--epochs', type=int, help='number of training epochs')
 parser.add_argument('--train_split', type=float, help='train split')
 parser.add_argument('--stations_cam', help='list of stations with camera number, separated with underscore (e.g. Buelenberg_1')
-#parser.add_argument('--cam', help='camera number')
 parser.add_argument('--weighted', help='how to weight the classes (manual: as given in script / Auto: Inversely proportional to occurance / False: not at all')
 parser.add_argument('--path_dset', help='path to used dataset ')
 parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler')
@@ -218,19 +214,10 @@ STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
 STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
-# following done in class DischmaSet
-# STATION_CAM = STATIONS_CAM_LST[0]  # here: TODO maybe loop over all avaible cams/stations from 
-# STATION, CAM = STATION_CAM.split('_')
-
-
 N_CLASSES = 2
-#PATH_MODEL = f'models/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
-PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}'
-#PATH_STATS_TRAIN = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}.json'
-#PATH_STATS_VAL = f'stats/{STATION}{CAM}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_validation.json'
+PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 
 # create datasets and dataloaders
-#####dset = DischmaSet(root=PATH_DATASET, station=STATION, camera=CAM)
 dset = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
 print(f'Dischma set with data from {STATIONS_CAM_LST} created.')
 dset_train, dset_val = get_train_val_split(dset)
@@ -252,20 +239,15 @@ elif WEIGHTED == 'Auto':
     weights = torch.Tensor([w0, w1]).to(device)
 
 
-if os.path.exists(PATH_MODEL) == True:
-    print('trained model already exists, loading model...')
-    model = torch.load(PATH_MODEL)
-else:
-    model = models.resnet18(pretrained=True)
+#if os.path.exists(PATH_MODEL) == True:
+#    print('trained model already exists, loading model...')
+#    model = torch.load(PATH_MODEL)
+#else:
+model = models.resnet18(pretrained=True)
 
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev add momentum
 
-"""
-# Observe that only parameters of final layer are being optimized as
-# opposed to before.
-optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
-"""
 if LR_SCHEDULER == 'True':
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
 elif LR_SCHEDULER == 'False':
@@ -275,9 +257,19 @@ elif LR_SCHEDULER == 'False':
 for param in model.parameters():
     param.requires_grad = True
     param = param.to(device)  # prob not needed (whole model set to device later)
+
+## sth like this for feature extractor
+"""
+# do not apply backprop on weight that were used for feature extraction
+for param in model.parameters():
+    param.requires_grad = False
+    param = param.to(device)
+"""
+
 # adapt fully connected layer
 n_features = model.fc.in_features
 model.fc = nn.Linear(n_features, N_CLASSES)
+
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
 model = model.to(device)

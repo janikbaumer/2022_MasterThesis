@@ -64,8 +64,6 @@ class DischmaSet():
     def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg1', 'Buelenberg_2']):
         # create list of file names (raw images)
         # loop over all stations / cams (for devel, only choose BB1)
-        # todo: when looping, consider that not all stations have 3 cameras
-        # todo: when looping, maybe do nested list or change list name (depending on cam/station) -> consider that at same time, multiple images from diff cams exist
         self.root = root
         self.stat_cam_lst = stat_cam_lst
 
