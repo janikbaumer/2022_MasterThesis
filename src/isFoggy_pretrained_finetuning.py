@@ -7,11 +7,13 @@ import json
 import os
 import wandb
 import ast
+import random
 
 from time import time
 import numpy as np
 from numpy import datetime_as_string
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
+
 
 from torch.utils.data import DataLoader, random_split
 from torch import nn
@@ -100,6 +102,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             cm_tot = np.zeros((2,2), dtype='int64')
 
             for x, y in dloader:
+                
                 # move to GPU
                 x = x.to(device)
                 y = y.to(device)
@@ -148,18 +151,22 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 epoch_loss = running_loss/len_dset_train
                 if scheduler is not None:
                     scheduler.step()
+                    scheduler.print_lr()
+
             elif phase == 'val':
                 epoch_loss = running_loss/len_dset_val
 
             print('epoch loss = ', epoch_loss)
 
             acc, prec_isFoggyIsTrue, rec_isFoggyIsTrue, f1_isFoggyIsTrue = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=1)
+            
+            # TODO: do every 200th batch iteration or so
             wandb.log({f'{phase} loss' : epoch_loss})
             wandb.log({f'{phase} accuracy' : acc})
             wandb.log({f'{phase} precision (isFoggy is True)' : prec_isFoggyIsTrue})
             wandb.log({f'{phase} recall (isFoggy is True)' : rec_isFoggyIsTrue})  # this should be high !!! (to catch all (foggy) images)
             wandb.log({f'{phase} F1-score (isFoggy is True)' : f1_isFoggyIsTrue})
-
+            # log n_epoch and n_batch_iteration
             """
             acc, prec_isFoggyIsFalse, rec_isFoggyIsFalse, f1_isFoggyIsFalse = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=0)
             wandb.log({f'{phase} precision (isFoggy is False)' : prec_isFoggyIsFalse})
@@ -178,8 +185,20 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
 
 # REPRODUCIBILITY 
+random_seed = 42
+
 torch.seed()  # only for CPU
-torch.manual_seed(42)  # works for CPU and CUDA
+torch.manual_seed(random_seed)  # works for CPU and CUDA
+
+# Fix all random seeds
+torch.manual_seed(random_seed)
+random.seed(random_seed)
+np.random.seed(random_seed)
+torch.cuda.manual_seed(random_seed)
+torch.cuda.manual_seed_all(random_seed)
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+os.environ['PYTHONHASHSEED'] = str(random_seed)
 
 
 ############ ARGPARSERS, GLOBAL VARIABLES ############
@@ -249,7 +268,7 @@ criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)  # TODO: curre
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev add momentum
 
 if LR_SCHEDULER == 'True':
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=7, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
 elif LR_SCHEDULER == 'False':
     exp_lr_scheduler = None
 
