@@ -147,11 +147,12 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     print(f'loop: {loop} / {len(dloader)} ... {phase} loss (avg over these 200 loops): ', loop_loss/200)
                     loop_loss = 0
 
+
             if phase == 'train':
                 epoch_loss = running_loss/len_dset_train
                 if scheduler is not None:
                     scheduler.step()
-                    scheduler.print_lr()
+                    # scheduler.print_lr()
 
             elif phase == 'val':
                 epoch_loss = running_loss/len_dset_val
@@ -161,11 +162,13 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             acc, prec_isFoggyIsTrue, rec_isFoggyIsTrue, f1_isFoggyIsTrue = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=1)
             
             # TODO: do every 200th batch iteration or so
-            wandb.log({f'{phase} loss' : epoch_loss})
-            wandb.log({f'{phase} accuracy' : acc})
-            wandb.log({f'{phase} precision (isFoggy is True)' : prec_isFoggyIsTrue})
-            wandb.log({f'{phase} recall (isFoggy is True)' : rec_isFoggyIsTrue})  # this should be high !!! (to catch all (foggy) images)
-            wandb.log({f'{phase} F1-score (isFoggy is True)' : f1_isFoggyIsTrue})
+            wandb.log({
+                f'{phase} loss' : epoch_loss,
+                f'{phase} accuracy' : acc,
+                f'{phase} precision (isFoggy is True)' : prec_isFoggyIsTrue,
+                f'{phase} recall (isFoggy is True)' : rec_isFoggyIsTrue,  # this should be high !!! (to catch all (foggy) images)
+                f'{phase} F1-score (isFoggy is True)' : f1_isFoggyIsTrue,
+                'n_epoch' : epoch})
             # log n_epoch and n_batch_iteration
             """
             acc, prec_isFoggyIsFalse, rec_isFoggyIsFalse, f1_isFoggyIsFalse = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=0)
@@ -239,7 +242,7 @@ PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epoc
 # create datasets and dataloaders
 dset = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
 print(f'Dischma set with data from {STATIONS_CAM_LST} created.')
-dset_train, dset_val = get_train_val_split(dset)
+dset_train, dset_val = get_train_val_split(dset)  # get e.g. 1 year of train data (eg 2019) and 4 mths of val data (e.g. 2020 Jan/April/July/Oct) - this val set must be handlabeled
 len_dset_train, len_dset_val = len(dset_train), len(dset_val)
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
@@ -267,9 +270,9 @@ model = models.resnet18(pretrained=True)
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev add momentum
 
-if LR_SCHEDULER == 'True':
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=0.1)  # Decay LR by a factor of 0.1 every 7 epochs
-elif LR_SCHEDULER == 'False':
+if LR_SCHEDULER != 'None':
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
+elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
 # train all layers (should already be default)
