@@ -4,6 +4,9 @@ import pandas as pd
 import torch
 import torchvision
 from torchvision.transforms import functional as F
+from torchvision import transforms
+import numpy as np
+from matplotlib import pyplot as plt
 
 """
 def check_files_second_format(lst):
@@ -25,7 +28,7 @@ def check_files_second_format(lst):
 def get_indices(path, raw_img):
     raw_img_jpg = raw_img[:-4]+'.jpg'  #  in case compressed (.png) files were used
     day = raw_img[0:8]  # get yyyymmdd from yyyymmddHHMMSS.jpg
-    path_txtfile = f'{path}/{day}.txt'
+    path_txtfile = os.path.join(path, f'{day}.txt')
     if not os.path.isfile(path_txtfile):
         # TODO: go look in fog_index_all.mat file if there is an entry for this day
         a_0, fog_index = None, None
@@ -40,10 +43,10 @@ def get_indices(path, raw_img):
     return a_0, fog_index
 
 def get_cam_thresholds(path):
-    path = f'{path}/thresholds.txt'
+    path = os.path.join(path, 'thresholds.txt')
     with open(path) as f:
         df = pd.read_csv(f, delim_whitespace=True, names=['A0', 'fog_index'])
-        
+
         A0_far0 = df.loc[0]['A0']
         fog_idx_far0 = df.loc[0]['fog_index']
         A0_optim = df.loc[1]['A0']
@@ -59,13 +62,26 @@ def check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_
 
 
 class DischmaSet():
-    
+
     #####def __init__(self, root='../datasets/dataset_complete/', station='Buelenberg', camera='1') -> None:
     def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg1', 'Buelenberg_2']):
         # create list of file names (raw images)
         # loop over all stations / cams (for devel, only choose BB1)
         self.root = root
         self.stat_cam_lst = stat_cam_lst
+        self.YEAR_TRAIN = '2020'
+        self.YEAR_VAL = '2021'
+
+        self.transform = transforms.Compose([
+            # transforms.RandomHorizontalFlip(p=0.5),
+            # transforms.ConvertImageDtype(torch.float),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            ])
+
+        self.inv_transform = transforms.Compose(
+            [transforms.Normalize(mean= [0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
+            transforms.Normalize(mean= [-0.485, -0.456, -0.406], std=[1., 1., 1.])]
+        )
 
         self.DOWNSCALE_FACTOR = 1  # 1 for no downsampling, else height and width is (each) downscaled by this factor
 
@@ -75,17 +91,16 @@ class DischmaSet():
         for camstation in stat_cam_lst:
             STATION, CAM = camstation.split('_')
 
-            self.PATH_RAW_IMAGE = root + f'DischmaCams/{STATION}/{CAM}'
-            self.PATH_COMPOSITE = root + f'Composites/Cam{CAM}_{STATION}'
-        
+            self.PATH_RAW_IMAGE = os.path.join(root, 'DischmaCams', STATION, CAM)
+            self.PATH_COMPOSITE = os.path.join(root, 'Composites', f'Cam{CAM}_{STATION}')
+
             # get thresholds for this station/cam
             A0_optim, fog_idx_optim, A0_far0, fog_idx_far0 = get_cam_thresholds(self.PATH_COMPOSITE)
 
-            # create list of filenames (raw images, sorted)
-            self.file_list_camstat = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if (f.endswith('.jpg') or f.endswith('.png')) and isfile(os.path.join(self.PATH_RAW_IMAGE, f))])
+            # create list of filenames (raw images, sorted) (only of given years)
+            self.file_list_camstat = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if (f.endswith('.jpg') or f.endswith('.png')) and isfile(os.path.join(self.PATH_RAW_IMAGE, f)) and (f[0:4] == self.YEAR_TRAIN or f[0:4] == self.YEAR_VAL)])
 
             #check_files_second_format(file_list_camstat)
-
 
             # for each jpg/png file, get indices, compare to camera thresholds
             # and check whether img was used for composite image generation
@@ -93,7 +108,7 @@ class DischmaSet():
 
             # not done with dicts (keys cannot be accessed with indices (used for getitem method))
             for raw_img_name in self.file_list_camstat:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
-                full_path = f'{self.PATH_RAW_IMAGE}/{raw_img_name}'
+                full_path = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
                 A0_img, fog_idx_img = get_indices(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
                 if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
                     a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
@@ -114,12 +129,12 @@ class DischmaSet():
         """
         returns a data sample from the dataset (this fct will be called <batch size> times, in every loop)
         """
-        #### TODO CHECK HOW IMAGE IS GOTTEN
+        #### TODO CHECK HOW IMAGE IS GOT
         # given idx, get image with filename belonging to this specific index
-        
+
         # self.img_name = self.path_list_valid[idx]
         self.path_img = self.path_list_valid[idx]
-        
+
 
         #for camstation in self.stat_cam_lst:
         #    STATION, CAM = camstation.split('_')
@@ -129,13 +144,29 @@ class DischmaSet():
         # self.path_img = f'{self.PATH_RAW_IMAGE}/{self.img_name}'
 
         # read and downscale image
-        
         image = torchvision.io.read_image(path=self.path_img)
         shp = image.shape  # torch.Size([3, 6000, 4000])
         shp = tuple(image.shape[-2:])  # (6000, 4000)
         shp_new = tuple(int(x/self.DOWNSCALE_FACTOR) for x in shp)
         image = F.resize(img=image, size=shp_new)
         image = image.float()  # convert uint8 to float32
+
+        # normalization / standardization
+        """
+        mean = image.mean((1,2))
+        std = image.std((1,2))
+        norm = torchvision.transforms.Normalize(mean, std)
+        image = norm(image)
+        """
+
+        """
+        # transformations
+        norm_image = self.transform(image)
+
+        # show unnormalized image:
+        unnorm_img = self.inv_transform(norm_image)
+        plt.imshow(np.transpose(unnorm_img.numpy(), (1, 2, 0)))
+        """
 
         # get label (True if img is foggy, resp. img was not used for composite image generation)
         label = self.is_foggy[idx]
@@ -152,8 +183,8 @@ class DischmaSet():
 
 if __name__=='__main__':
     # test what happens (call init function)
-    x = DischmaSet(station='Stillberg', camera='3')
+    x = DischmaSet(root='../datasets/dataset_downsampled_devel/', stat_cam_lst=['Buelenberg_1'])
     nclear, nfog = x.get_balancedness()
-
+    img, lbl = x.__getitem__(0)
     print('nfog, nclear: ', nfog, nclear)
     print('n total (labeled images): ', nfog + nclear)
