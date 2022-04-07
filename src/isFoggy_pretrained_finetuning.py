@@ -78,42 +78,6 @@ def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
 
     return acc, prec, rec, f1
 
-"""
-def get_and_print_stats(confmat, mode=None, label_isFoggy=None):
-    if mode == 'train':
-        print('TRAINING METRICS: ')
-    elif mode == 'val':
-        print('VALIDATION METRICS: ')
-
-    tn, fp, fn, tp = confmat.ravel()
-
-    acc = (tn+tp)/(tn+fp+tp+fn)  # acc represents the number of correctly classified data instances over the total number of data instances
-
-    if label_isFoggy == 1:  # if isFoggy is considered as the True label
-        prec_isFoggyIsTrue = tp/(tp+fp)  # goal to keep fp low (to get high precision)
-        print('prec_isFoggyIsTrue: \n', prec_isFoggyIsTrue, '\n')
-
-        rec_isFoggyIsTrue = tp/(tp+fn)  # goal to keep fn low (to get high recall)
-        print('rec_isFoggyIsTrue: \n', rec_isFoggyIsTrue, '\n')
-
-        f1_isFoggyIsTrue = 2*(prec_isFoggyIsTrue*rec_isFoggyIsTrue)/(prec_isFoggyIsTrue+rec_isFoggyIsTrue)
-        print('f1_isFoggyIsTrue: \n', f1_isFoggyIsTrue, '\n')
-
-        return acc, prec_isFoggyIsTrue, rec_isFoggyIsTrue, f1_isFoggyIsTrue
-
-    if label_isFoggy == 0:  # if isFoggy is considered as the False label
-        prec_isFoggyIsFalse = tn/(tn+fn)  # goal to keep fp low (to get high precision)
-        print('prec_isFoggyIsFalse: \n', prec_isFoggyIsFalse, '\n')
-
-        rec_isFoggyIsFalse = tn/(tn+fp)  # goal to keep fn low (to get high recall)
-        print('rec_isFoggyIsFalse: \n', rec_isFoggyIsFalse, '\n')
-
-        f1_isFoggyIsFalse =  2*(prec_isFoggyIsFalse*rec_isFoggyIsFalse)/(prec_isFoggyIsFalse+rec_isFoggyIsFalse)
-        print('f1_isFoggyIsFalse: \n', f1_isFoggyIsFalse, '\n')
-
-        return acc, prec_isFoggyIsFalse, rec_isFoggyIsFalse, f1_isFoggyIsFalse
-"""
-
 def get_train_val_split(dset_full):
     print('splitting in train/test...')
     len_full = len(dset_full)
