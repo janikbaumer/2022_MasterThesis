@@ -42,6 +42,21 @@ def get_indices(path, raw_img):
                 a_0, fog_index = None, None
     return a_0, fog_index
 
+def get_manual_label(path_to_file, file):
+    full_path_manual_labels = os.path.join(path_to_file, 'manual_labels_isfoggy.txt')
+
+    if not os.path.isfile(full_path_manual_labels):
+        return None
+    else:
+        with open(full_path_manual_labels) as f:
+            df = pd.read_csv(f, delim_whitespace=True, names=['filename', 'isfoggy'], index_col='filename')
+            if file in df.index:
+                label = df.at[file, 'isfoggy']
+            else:
+                label = None
+        return label
+
+
 def get_cam_thresholds(path):
     path = os.path.join(path, 'thresholds.txt')
     with open(path) as f:
@@ -63,16 +78,24 @@ def check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_
 
 class DischmaSet():
 
-    #####def __init__(self, root='../datasets/dataset_complete/', station='Buelenberg', camera='1') -> None:
-    def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg1', 'Buelenberg_2']):
+    ##### def __init__(self, root='../datasets/dataset_complete/', station='Buelenberg', camera='1') -> None:
+    def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1', 'Buelenberg_2'], mode='train'):
         # create list of file names (raw images)
         # loop over all stations / cams (for devel, only choose BB1)
         self.root = root
         self.stat_cam_lst = stat_cam_lst
+        self.mode = mode
         self.YEAR_TRAIN = '2020'
         self.YEAR_VAL = '2021'
+        self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
 
-        self.transform = transforms.Compose([
+        self.transform_train = transforms.Compose([
+            transforms.RandomHorizontalFlip(p=0.5),
+            # transforms.ConvertImageDtype(torch.float),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            ])
+
+        self.transform_val = transforms.Compose([
             # transforms.RandomHorizontalFlip(p=0.5),
             # transforms.ConvertImageDtype(torch.float),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
@@ -93,43 +116,66 @@ class DischmaSet():
 
             self.PATH_RAW_IMAGE = os.path.join(root, 'DischmaCams', STATION, CAM)
             self.PATH_COMPOSITE = os.path.join(root, 'Composites', f'Cam{CAM}_{STATION}')
+            self.full_path_manual_labels = os.path.join(self.PATH_RAW_IMAGE, 'manual_labels_isfoggy.txt')
 
             # get thresholds for this station/cam
             A0_optim, fog_idx_optim, A0_far0, fog_idx_far0 = get_cam_thresholds(self.PATH_COMPOSITE)
 
             # create list of filenames (raw images, sorted) (only of given years)
-            self.file_list_camstat = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if (f.endswith('.jpg') or f.endswith('.png')) and isfile(os.path.join(self.PATH_RAW_IMAGE, f)) and (f[0:4] == self.YEAR_TRAIN or f[0:4] == self.YEAR_VAL)])
+            self.file_list_camstat_years = sorted([f for f in os.listdir(self.PATH_RAW_IMAGE) if (f.endswith('.jpg') or f.endswith('.png')) and isfile(os.path.join(self.PATH_RAW_IMAGE, f)) and (f[0:4] == self.YEAR_TRAIN or f[0:4] == self.YEAR_VAL)])
 
-            #check_files_second_format(file_list_camstat)
+            #check_files_second_format(file_list_camstat_years)
 
             # for each jpg/png file, get indices, compare to camera thresholds
             # and check whether img was used for composite image generation
             # create a label list of booleans (ordered the same as list with file names)
 
             # not done with dicts (keys cannot be accessed with indices (used for getitem method))
-            for raw_img_name in self.file_list_camstat:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
-                full_path = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
-                A0_img, fog_idx_img = get_indices(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
-                if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
-                    a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
-                    used_for_comp = a0_passed_th and fog_passed_th  # one bool, whether this img was used for composite image generation
-                    img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
+            for raw_img_name in self.file_list_camstat_years:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
+                full_path_img = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
+
+                if self.mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:  # use labels from txt files from PCA
+                    A0_img, fog_idx_img = get_indices(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
+                    if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
+                        a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
+                        used_for_comp = a0_passed_th and fog_passed_th  # one bool, whether this img was used for composite image generation
+                        img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
+                        self.is_foggy.append(int(img_is_foggy))
+                        self.path_list_valid.append(full_path_img)
+
+                if self.mode == 'val' and raw_img_name[0:4] == self.YEAR_VAL and raw_img_name[4:6] in self.MONTHS_VAL:  # use manual labels
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
+                    else:
+                        print('manual labels do not exist, make sure to label them first (create file manual_labels_isfoggy.txt (with script handlabelling.py!')
+                        break
+                """
+                # TODO: adapt variable img_is_foggy with data from respective file 'manual_labels_isfoggy.txt'
+                if mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:
                     self.is_foggy.append(int(img_is_foggy))
-                    # self.path_list_valid.append(raw_img_name)
-                    self.path_list_valid.append(full_path)
+                    self.path_list_valid.append(full_path_img)
+                elif mode == 'val' and raw_img_name[0:4] == self.YEAR_VAL and raw_img_name[4:6] in self.MONTHS_VAL:
+                    self.is_foggy.append(int(img_is_foggy))
+                    self.path_list_valid.append(full_path_img)
+                """
+
+            print()
 
     def __len__(self):
         """
-        returns the number of VALID samples in our dataset (where not both a0 and fog_idx are None)
+        returns the number of VALID samples in our dataset
         """
         return len(self.path_list_valid)
 
 
     def __getitem__(self, idx):
         """
-        returns a data sample from the dataset (this fct will be called <batch size> times, in every loop)
+        returns a data sample from the dataset (this fct will be called <batch size> times, in every batch iteration)
         """
-        #### TODO CHECK HOW IMAGE IS GOT
+
         # given idx, get image with filename belonging to this specific index
 
         # self.img_name = self.path_list_valid[idx]
@@ -152,6 +198,8 @@ class DischmaSet():
         image = image.float()  # convert uint8 to float32
 
         # normalization / standardization
+        image = image/255  # convert to values between 0 and 1
+        
         """
         mean = image.mean((1,2))
         std = image.std((1,2))
@@ -159,10 +207,14 @@ class DischmaSet():
         image = norm(image)
         """
 
-        """
+        
         # transformations
-        norm_image = self.transform(image)
+        # plt.imshow(image.numpy().transpose(1,2,0))
+        # plt.show()
 
+        norm_image = self.transform_train(image)
+
+        """
         # show unnormalized image:
         unnorm_img = self.inv_transform(norm_image)
         plt.imshow(np.transpose(unnorm_img.numpy(), (1, 2, 0)))
@@ -183,7 +235,7 @@ class DischmaSet():
 
 if __name__=='__main__':
     # test what happens (call init function)
-    x = DischmaSet(root='../datasets/dataset_downsampled_devel/', stat_cam_lst=['Buelenberg_1'])
+    x = DischmaSet(root='../datasets/dataset_downsampled/', stat_cam_lst=['Stillberg_2'], mode='val')
     nclear, nfog = x.get_balancedness()
     img, lbl = x.__getitem__(0)
     print('nfog, nclear: ', nfog, nclear)
