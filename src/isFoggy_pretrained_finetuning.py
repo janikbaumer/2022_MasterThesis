@@ -75,7 +75,6 @@ def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
         'n_epoch' : ep,
         'batch_iteration' : bi})
 
-
     return acc, prec, rec, f1
 
 def get_train_val_split(dset_full):
@@ -102,28 +101,29 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
 
     for epoch in range(num_epochs):
-        print()
-        print('-' * 10)
+        print('\n', '-' * 10)
 
-        # in each epoch, do training and validation
-        for phase in ['train', 'val']:
-
+        for phase in ['train', 'val']:  # in each epoch, do training and validation
             print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
+
             if phase == 'train':
                 model.train()
                 dloader = dloader_train
+                dset = dset_train
                 len_dset_current = len(dset_train)
             else:
                 model.eval()
                 dloader = dloader_val
+                dset = dset_val
                 len_dset_current = len(dset_val)
 
             running_loss = 0.0  # loss (to be updated during batch iteration)
             batch_it_loss, epoch_loss = 0, 0
-            """ # cm_tot = np.zeros((2,2), dtype='int64') """
-            # y_true_total, y_pred_total = [], []
             y_true_batch_it, y_pred_batch_it, y_probab_batch_it = [], [], []
 
+            """ # cm_tot = np.zeros((2,2), dtype='int64') """
+            # y_true_total, y_pred_total = [], []
+            
             for x, y in dloader:
 
                 # move to GPU
@@ -144,7 +144,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 # forward pass, track history (calc gradients) only in training
                 with torch.set_grad_enabled(phase == 'train'):
                     pred = model(x)  # shape: batchsize, nclasses
-                    y_probab = pred[:,1]
+                    y_probab = pred[:,1]  # probability for class one
                     pred_binary = pred.argmax(dim=1)  # to compare to y (y_true) # TODO: maybe use different thresholds
                     loss = criterion(pred, y)
 
@@ -152,13 +152,15 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss.backward()  # backprop
                         optimizer.step()  # update params
 
+                # stats
                 y_true = y.cpu().tolist()
                 y_probab = y_probab.cpu().tolist()
                 y_pred = pred_binary.cpu().tolist()
 
                 # get losses
-                running_loss += loss.item() * x.size(0) # loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg
-                batch_it_loss += loss.item() * x.size(0) # loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg
+                batch_loss = loss.item() * x.size(0)  # loss of whole batch, loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg
+                running_loss += batch_loss
+                batch_it_loss += batch_loss
 
 
                 y_true_batch_it.extend(y_true)
@@ -292,9 +294,9 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 
-"""
+
 # create datasets and dataloaders
-###dset = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
+###dset(_full) = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
 dset_train = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
 dset_val = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
@@ -307,7 +309,7 @@ len_dset_train, len_dset_val = len(dset_train), len(dset_val)
 # to try with only handlabeled data
 dset_full = DischmaSet(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 dset_train, dset_val = get_train_val_split(dset_full)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
-
+"""
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
@@ -334,13 +336,12 @@ elif WEIGHTED == 'Manual':
 
 # dict(model.named_modules()) -> gets all layers with implementation (only names: dct.keys() )
 
-# note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
 
 ### RESNET -- should work
 model = models.resnet18(pretrained=True)
 n_features = model.fc.in_features  # adapt fully connected layer
-model.fc = nn.Linear(n_features, N_CLASSES)
+model.fc = nn.Linear(n_features, N_CLASSES)  # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
 # ### EFFICIENT NET -- too much memory used
 # model = models.efficientnet_b1(pretrained=True)
@@ -364,6 +365,7 @@ model.fc = nn.Linear(n_features, N_CLASSES)
 
 model = model.to(device)
 
+# note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)  # TODO ev add momentum
 
@@ -372,8 +374,8 @@ if LR_SCHEDULER != 'None':
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
-# train all layers (should already be default)
 """
+# train all layers (should already be default)
 for param in model.parameters():
     param.requires_grad = True  # if False, do not apply backprop on weight that were used for feature extraction -> fixed feature extractor
     param = param.to(device)  # prob not needed (whole model set to device later)
