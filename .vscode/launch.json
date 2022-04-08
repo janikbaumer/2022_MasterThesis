@@ -12,18 +12,17 @@
             "console": "integratedTerminal",
             //"cwd": "${workspaceFolder}"
             "cwd": "${fileDirname}",
+            "justMyCode": false,
             "args":
             [
                 "--batch_size", "8",
                 "--lr", "0.01",
-                "--epochs", "20",
+                "--epochs", "10",
                 "--train_split", "0.8",
-                "--stations", "['Buelenberg_1', 'Sattel_1', 'Stillberg_2']",  //comma separated, single elements in string quotes, station_cam separated with underscore !
-                //"--cam", "1",
-                "--weighted", "Manual",
-                "--path_dset", "../datasets/dataset_downsampled/",
-                "--lr_scheduler", "True",
-
+                "--stations", "['Buelenberg_1']", //, 'Sattel_1', 'Stillberg_2']",  //comma separated, single elements in string quotes, station_cam separated with underscore !
+                "--weighted", "False", //Manual, Auto, False
+                "--path_dset", "../datasets/dataset_downsampled_devel/",
+                "--lr_scheduler", "7", //either integer or "None"
             ]
         }
     ]
