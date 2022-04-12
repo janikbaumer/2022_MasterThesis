@@ -40,7 +40,7 @@ print('imports done')
         # TODO easier solution: make sure imgs are in range (0,1) not (0.255) -> check mean and std
         # assumption: learned features from resnet can also be used for our imgaes (same pixel distribution)
         # (might be slightly wrong, as I am using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
-        
+
         # solution: calculate mean every time and for each image to be computed ->
         #   newtf = transforms.Normalize((image.mean((1,2))), (0.229, 0.224, 0.225)) TODO: same thing for std
         #   newimg = newtf(oldimg)
@@ -97,34 +97,59 @@ def print_grid(x, y, batchsize, batch_iteration):
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
+
+    """
     batch_iteration = 0
-
-
+    """
+    
+    batch_iteration = {}
+    batch_iteration['train'] = 0
+    batch_iteration['val'] = 0
+    
     for epoch in range(num_epochs):
         print('\n', '-' * 10)
+        
+
 
         for phase in ['train', 'val']:  # in each epoch, do training and validation
             print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
+
+            train_it_counter, val_it_counter = 0, 0
 
             if phase == 'train':
                 model.train()
                 dloader = dloader_train
                 dset = dset_train
+                """
                 len_dset_current = len(dset_train)
+                """
             else:
                 model.eval()
                 dloader = dloader_val
                 dset = dset_val
+                """
                 len_dset_current = len(dset_val)
+                """
 
-            running_loss = 0.0  # loss (to be updated during batch iteration)
+            running_loss = 0  # loss (to be updated during batch iteration)
             batch_it_loss, epoch_loss = 0, 0
-            y_true_batch_it, y_pred_batch_it, y_probab_batch_it = [], [], []
-
-            """ # cm_tot = np.zeros((2,2), dtype='int64') """
-            # y_true_total, y_pred_total = [], []
             
+            """
+            y_true_batch_it, y_pred_batch_it, y_probab_batch_it = [], [], []
+            # cm_tot = np.zeros((2,2), dtype='int64')
+            # y_true_total, y_pred_total = [], []
+            """
+            y_true_total = []
+            y_pred_probab_total = []
+            y_pred_binary_total = []
+
+
             for x, y in dloader:
+                """
+                batch_iteration += 1
+                """
+                batch_iteration[phase] += 1
+
 
                 # move to GPU
                 x = x.to(device)
@@ -143,9 +168,9 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                 # forward pass, track history (calc gradients) only in training
                 with torch.set_grad_enabled(phase == 'train'):
-                    pred = model(x)  # shape: batchsize, nclasses
-                    y_probab = pred[:,1]  # probability for class one
-                    pred_binary = pred.argmax(dim=1)  # to compare to y (y_true) # TODO: maybe use different thresholds
+                    pred = model(x)  # probabilities (for class 0 and 1) / shape: batchsize, nclasses (8,2)
+                    y_probab = pred[:,1]   # probability for class one / shape: batchsize (8) / vals in range (0,1)
+                    pred_binary = pred.argmax(dim=1)   # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true) # TODO: maybe use different thresholds
                     loss = criterion(pred, y)
 
                     if phase == 'train':
@@ -153,14 +178,29 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         optimizer.step()  # update params
 
                 # stats
+                """
                 y_true = y.cpu().tolist()
                 y_probab = y_probab.cpu().tolist()
                 y_pred = pred_binary.cpu().tolist()
+                """
+                predictions = pred.cpu().detach().numpy()
+                y_true = y.cpu().tolist()
+                y_pred_probab = y_probab.cpu().tolist()  # prob for class one
+                y_pred_binary = pred_binary.cpu().tolist()
 
+                y_true_total.extend(y_true)
+                y_pred_probab_total.extend(y_pred_probab_total)
+                y_pred_binary_total.extend(y_pred_binary)
+
+                # losses
+                batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
+                running_loss += batch_loss
+
+                """
                 # get losses
                 batch_loss = loss.item() * x.size(0)  # loss of whole batch, loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg
                 running_loss += batch_loss
-                batch_it_loss += batch_loss
+                batch_it_loss += batch_los
 
 
                 y_true_batch_it.extend(y_true)
@@ -184,36 +224,58 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                 # batch_iteration += 1
 
+                """
+
                 if phase == 'train':
-                    batch_iteration += 1
-                    if (batch_iteration%10) == 0:
-                        batch_it_loss = batch_it_loss/10
-                        print(f'batch iteration: {batch_iteration} / {len(dloader)} ... batch loss ({phase}), avg over these 200 batch iterations: ', batch_it_loss)
+                    train_it_counter += 1
+                    LOG_EVERY = 200
+                    if (batch_iteration[phase]%LOG_EVERY) == 0:
+                        """
+                        batch_it_loss = batch_it_loss/LOG_EVERY
+                        """
+                        loss = running_loss/LOG_EVERY
+                        """print(f'batch iteration: {batch_iteration} / {len(dloader)} ... batch loss ({phase}), avg over these 200 batch iterations: ', batch_it_loss)"""
+                        print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over these {LOG_EVERY} batch iterations): {loss}')
+
                         # get metrics
-                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_batch_it, ypred=y_pred_batch_it, yprob=y_probab_batch_it, ep=epoch, batch_it_loss=batch_it_loss, ph=phase, bi=batch_iteration)
+                        """acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_batch_it, ypred=y_pred_batch_it, yprob=y_probab_batch_it, ep=epoch, batch_it_loss=batch_it_loss, ph=phase, bi=batch_iteration)"""
+                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
+                        running_loss = 0
+
+                        """
                         batch_it_loss = 0
                         y_true_batch_it, y_pred_batch_it = [], []
+                        """
 
 
                 if phase == 'val':
-                    #if batch_iteration == len(dloader):
-                    batch_it_loss = batch_it_loss/len(dloader)
-                    print(f'batch iteration: {batch_iteration} / {len(dloader)} ... {phase} loss (avg over whole validation dataloader): ', batch_it_loss/len(dloader))
+                    val_it_counter += 1
 
-                    # get metrics
-                    acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_batch_it, ypred=y_pred_batch_it, yprob=y_probab_batch_it, ep=epoch, batch_it_loss=batch_it_loss, ph=phase, bi=batch_iteration)
-                    print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
+                    if batch_iteration[phase]%len(dloader) == 0:
+                        """batch_it_loss = batch_it_loss/len(dloader)"""
+                        loss = running_loss/len(dloader)
+                        print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
+                        # get metrics
+                        """acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_batch_it, ypred=y_pred_batch_it, yprob=y_probab_batch_it, ep=epoch, batch_it_loss=batch_it_loss, ph=phase, bi=batch_iteration)"""
+                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
             if phase == 'train':
                 if scheduler is not None:
                     scheduler.step()
                     # scheduler.print_lr()
 
+
+            epoch_loss = running_loss / len(dset)
+            print(f'epoch loss in {phase} phase: {epoch_loss}')
+
+            """
             # epoch_loss = running_loss/len_dset_current
             epoch_loss = running_loss/(len(dloader_train) + len(dloader_val))
             print('epoch loss = ', epoch_loss)
+            """
 
             """
             #acc, prec_isFoggyIsTrue, rec_isFoggyIsTrue, f1_isFoggyIsTrue = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=1)
