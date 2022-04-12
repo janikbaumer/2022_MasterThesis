@@ -44,7 +44,7 @@ STATCAM_LST = [
     ]
 
 BASE_PATH = '../datasets/dataset_downsampled/DischmaCams/'  
-CAMSTAT = 'Buelenberg/2'  # may be changed (to one of STATCAM_LST)
+CAMSTAT = 'Stillberg/2'  # may be changed (to one of STATCAM_LST)
 
 ext = ('.png', '.jpg')
 manual_labels_file = os.path.join(BASE_PATH, CAMSTAT, 'manual_labels_isfoggy.txt')
@@ -104,4 +104,4 @@ with open(file=manual_labels_file, mode='a') as txtfile:
         if cont == True:
             continue
 
-print('everything from years 2020 and 2021 classified (if not exited with q)')
+print('everything from years 2021 (months: 01,04,07,10) classified (if not exited with q)')
