@@ -207,10 +207,10 @@ if __name__=='__main__':
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all, mode='val')
     img, lbl = x.__getitem__(11)
 
-    img = img/255.
+    # img = img/255.
 
     # to overlay images
-    # TODO: MAKE SURE i, l are PIL Images
+    # convert to PIL Images
     i = Image.fromarray(np.transpose(np.uint8(img*255), (1,2,0)))
     l = Image.fromarray(np.uint8(np.squeeze(lbl, axis=0)))
     # https://de.acervolima.com/uberlagern-sie-ein-bild-mit-einem-anderen-bild-in-python/
