@@ -140,4 +140,14 @@ src/models/
 src/wandb
 src/fig_check_manually
 src/fig_check_manually.zip
+src/correctly_placed_labels
 reading_material/
+todel/lena.png
+old_test_x_01.png
+old_test_y_01.png
+test_x_01.png
+test_x_02.png
+test_x_03.png
+test_y_01.png
+test_y_02.png
+test_y_03.png
