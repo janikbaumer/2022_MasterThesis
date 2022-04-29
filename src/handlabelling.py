@@ -43,8 +43,8 @@ STATCAM_LST = [
     'Stillberg/3'
     ]
 
-BASE_PATH = '../datasets/dataset_downsampled/DischmaCams/'  
-CAMSTAT = 'Stillberg/2'  # may be changed (to one of STATCAM_LST)
+BASE_PATH = '../datasets/dataset_downsampled/DischmaCams/'
+CAMSTAT = 'Sattel/1'  # may be changed (to one of STATCAM_LST)
 
 ext = ('.png', '.jpg')
 manual_labels_file = os.path.join(BASE_PATH, CAMSTAT, 'manual_labels_isfoggy.txt')
