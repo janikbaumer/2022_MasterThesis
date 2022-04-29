@@ -21,10 +21,62 @@ from torch.optim import lr_scheduler
 from dischma_set_segmentation import DischmaSet_segmentation
 
 import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.encoders import get_preprocessing_fn
+
+import cv2
+
+def save_x_y(x, y):
+    """
+    x.shape: torch.Size([batchsize, 3, 4000, 5984])
+    y.shape: torch.Size([batchsize, 1, 4000, 6000])
+    # note: x image will get very large
+
+    """
+    plt.imsave(fname='../test_x_03.png', arr=np.transpose(x[0].numpy(), (1,2,0)))
+    y[y == 1] == 255  # snow -> white
+    y[y == 3] == 125  # no data -> gray (no snow will stay 0 -> black)
+    cv2.imwrite('../test_y_03.png', np.transpose(y[0].numpy(), (1,2,0)))
+    # to show y[0], so first element of label batch: 
+    # plt.imshow(np.transpose(y[0].numpy(), (1,2,0)))
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
-    pass
+    for epoch in range(num_epochs):
 
+        for phase in ['train', 'val']:  # in each epoch, do training and validation
+            print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
+
+            for x, y in dloader_train:
+                save_x_y(x, y)
+
+                x = x.to(device)
+                y = y.to(device)
+
+                x = x.float()
+                y = y.float()
+
+                optimizer.zero_grad()
+
+                with torch.set_grad_enabled(phase == 'train'):
+                    y_pred = model(x)  # torch.Size([8, 3, 256, 256])
+                    y_pred = y_pred.argmax(axis=1) # for each batch image, 
+                    y_pred[y_pred == 2] = 3  # because no_data = 3 (two was only the index)
+                    
+
+                    # x_arr = x.flatten()  # TODO: x was 3D, y is only 1D !!!
+                    y_true_list = list(y.flatten().cpu().numpy())
+                    y_pred_list = list(y_pred.flatten().cpu().numpy())
+                    loss = criterion(..., ...)  # TODO
+                    
+
+                    loss = criterion()
+                    # show predicted image
+                    # plt.imshow(np.transpose(y_pred[0].cpu().numpy().reshape(1, *y_pred.shape[1:]), (1,2,0)))
+
+                    if phase == 'train':
+                        loss.backward()  # backprop
+                        optimizer.step()  # update params
+
+                print()
 
 
 # try U-Net for image segmentation
@@ -109,12 +161,16 @@ model = smp.Unet(
     encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-    classes=3,                      # model output channels (number of classes in your dataset)
+    classes=2,                      # model output channels (number of classes in your dataset)
 )
 model = model.to(device)
 
-x, y = dset_train[0]
-print()
+"""
+preprocess_input = get_preprocessing_fn('resnet34', pretrained='imagenet')
+x_try = torch.randn(size=(8, 3, 512, 512), dtype=torch.float32)
+x_try = preprocess_input(x_try)
+out = model(x_try)
+"""
 
 # loss functions to try: BCE / IoU-loss / focal loss
 criterion = nn.CrossEntropyLoss(reduction='mean')  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
