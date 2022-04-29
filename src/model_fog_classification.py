@@ -135,7 +135,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
             running_loss = 0  # loss (to be updated during batch iteration)
             batch_it_loss, epoch_loss = 0, 0
-            
+
             """
             y_true_batch_it, y_pred_batch_it, y_probab_batch_it = [], [], []
             # cm_tot = np.zeros((2,2), dtype='int64')
