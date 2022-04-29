@@ -144,10 +144,14 @@ class DischmaSet_segmentation():
         self.mode = mode
 
         self.patch_size = (400, 600)
+        self.patch_size = (256, 256)
+        if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both are divisible by 32 !!!
+            print('Warning: patch size must be divisible by 32 in both dimensions !')
+            print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
 
+        ### get lists with paths from composite images and corrsponding labels
         self.compositeimage_path_list = []
         self.label_path_list = []
-
         for camstation in stat_cam_lst:
             STATION, CAM = camstation.split('_')
             print(STATION, CAM)
@@ -161,11 +165,16 @@ class DischmaSet_segmentation():
             self.file_list_camstat_lbl = sorted([f for f in os.listdir(self.PATH_LABELS) if f.endswith('.tif') and isfile(os.path.join(self.PATH_LABELS, f))])
             for file in self.file_list_camstat_lbl:
                 self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
-
-
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
 
-
+        ### calc offset for each camstat 
+        # pixels needed to move from topleft corner - are always the same per camstat (from certain date, see excel file from slack: 'Zeitpunkte_Georef_DischmaCams.xlsx')
+        # tested few times visually and acc to ehafner
+        """
+        for camstation in stat_cam_lst:
+            pass
+        """
+        
     def __len__(self):
         """
         returns the number of VALID samples in dataset
@@ -190,14 +199,43 @@ class DischmaSet_segmentation():
         img = image.read()/255.  # should return 4000, 6000 image, vals between 0 and 1
         lbl = get_full_resolution_label(image, label)
 
-        print()
-        # only consider ceratin patch
-        random_offset_width = random.randint(0, image.width-self.patch_size[0])
-        random_offset_height = random.randint(0, image.height-self.patch_size[1])
+
+        # TODO: only consider ceratin patch 
+        #random_offset_width = random.randint(0, image.width-self.patch_size[0])
+        #random_offset_height = random.randint(0, image.height-self.patch_size[1])
 
         # ev do some data augmentation
 
+
+        # assert divisible by 32 (assume here img still has shape 4000, 6000)
+        img = crop_center(img, img.shape[1], int(img.shape[2]-32/2))
+        lbl = crop_center(lbl, lbl.shape[1], int(lbl.shape[2]-32/2))
+
+        img = crop_random_patch(img, self.patch_size)
+        lbl = crop_random_patch(lbl, self.patch_size)
+
         return img, lbl
+
+def crop_center(arr, cropy, cropx):
+    ch, y,x = arr.shape
+    startx = x//2-(cropx//2)
+    starty = y//2-(cropy//2)    
+    return arr[:, starty:starty+cropy, startx:startx+cropx]
+
+def crop_random_patch(array, patch_size):
+    y_max = array.shape[1]
+    x_max = array.shape[2]
+
+    x_step = patch_size[0]
+    y_step = patch_size[1]
+    
+    x_start = random.randrange(x_max-x_step)
+    y_start = random.randrange(y_max-y_step)
+
+    array_patch = array[:, y_start:y_start+y_step, x_start:x_start+x_step]
+
+    return array_patch
+
 
 if __name__=='__main__':
     # test what happens (call init function)
