@@ -161,8 +161,8 @@ class DischmaSet_segmentation():
         # data augmentation 
 
         label_shape = rasterio.open(label_path).shape
-        xrand = random.randint(0, label_shape[0] - self.patch_size[0])
-        yrand = random.randint(0, label_shape[1] - self.patch_size[1])
+        xrand = random.randint(0, label_shape[1] - self.patch_size[1])
+        yrand = random.randint(0, label_shape[0] - self.patch_size[0])
 
         # get image and label patches
         lbl_patch, lbl_shape_full, xshift, yshift = get_label_patch_and_shape_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
