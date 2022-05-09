@@ -7,9 +7,8 @@ import wandb
 import ast
 import random
 
-from time import time
 import numpy as np
-from numpy import datetime_as_string
+from time import time
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
 
 
@@ -18,7 +17,6 @@ from torch import nn
 from torchvision import models
 from torch.optim import lr_scheduler
 
-from binary_classifier import MyNet
 from dischma_set_classification import DischmaSet_classification
 
 print('imports done')
