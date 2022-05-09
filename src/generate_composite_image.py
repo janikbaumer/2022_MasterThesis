@@ -84,13 +84,13 @@ else:
     good = np.where( (A0_indices[:] >= A0_min[1])  &  (test_index[:] >= index_min[1]))
     good=good[0]
     if len(good) > 5:
-	print('Using fair threshold')
-	N=len(good)
-       	for i in range(len(good)):
-             imarr=np.array(Image.open(folder_in+images[good[i]]),dtype=np.float)
-             arr=arr+imarr/N
-        
-    	# Round values in array and cast as 8-bit integer and save image
-    	arr=np.array(np.round(arr),dtype=np.uint8)
+        print('Using fair threshold')
+        N=len(good)
+        for i in range(len(good)):
+            imarr=np.array(Image.open(folder_in+images[good[i]]),dtype=np.float)
+            arr=arr+imarr/N
+            
+        # Round values in array and cast as 8-bit integer and save image
+        arr=np.array(np.round(arr),dtype=np.uint8)
         out=Image.fromarray(arr,mode="RGB")
         out.save(folder_out+'final_'+todaystr+'.jpg')

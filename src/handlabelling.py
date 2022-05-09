@@ -63,7 +63,7 @@ with open(file=manual_labels_file, mode='a') as txtfile:
         quit, cont = False, False
 
         # check if this image has already been classified manually (if line exists in txt file)
-        # if following two lines are uncommented, then images may be classified multiple times - manual_labels_isfoggy.txt files must be checked for duplicates
+        # if following two lines are uncommented, then images may be classified multiple times - manual_labels_isfoggy.txt files would have to be checked for duplicates
         # with these lines, no duplicates should occur (except ev if quitted incorrectly - not with 'q')
         if file[0:14] in data:
             continue

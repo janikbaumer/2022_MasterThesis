@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import datetime
 import sys
 
-
 ########## Define variable ################
 todaystr = sys.argv[1]
 folder_in = sys.argv[2]

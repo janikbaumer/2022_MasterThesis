@@ -187,4 +187,4 @@ def downsample_final_workdirs():
 
 # downsample_DischmaCams()
 # downsample_composites()
-downsample_final_workdirs()
+# downsample_final_workdirs()
