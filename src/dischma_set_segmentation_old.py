@@ -1,7 +1,9 @@
-import os, ast, re
-import math
+import os
 from os.path import isfile, join
+from re import fullmatch
+from turtle import clear
 import pandas as pd
+from sklearn.semi_supervised import LabelSpreading
 import torch
 import torchvision
 from torchvision.transforms import functional as F
@@ -14,58 +16,7 @@ from rasterio.plot import show
 import rasterio
 from rasterio.plot import show
 from PIL import Image
-import random, exifread
-
-
-############ REPRODUCIBILITY ############
-
-# Fix all random seeds
-random_seed = 42
-torch.seed()  # only for CPU
-torch.manual_seed(random_seed)  # should work for CPU and CUDA
-random.seed(random_seed)
-np.random.seed(random_seed)
-torch.cuda.manual_seed(random_seed)
-torch.cuda.manual_seed_all(random_seed)
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-os.environ['PYTHONHASHSEED'] = str(random_seed)
-
-
-
-def get_metadata(img_path=''):
-    with open(img_path, 'rb') as f:
-        tags = exifread.process_file(f)
-        transform_string = str(tags['Image Tag 0x8482'])
-        strng = re.findall(r'\[.*?\]', transform_string)[0]
-        lst = ast.literal_eval(strng)
-        tpl = tuple(lst)
-
-        xshift = math.floor(abs(tpl[3][0]))  # abrunden to get rid of half numbers
-        yshift = math.floor(abs(tpl[4][0]))  
-
-    return xshift, yshift
-
-def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand=3000, y_rand=2000):
-    x_patch = patchsize[0]
-    y_patch = patchsize[1]
-
-    with rasterio.open(lbl_path) as src:
-        full_shape = src.shape
-        arr = src.read(window=Window(x_rand, y_rand, x_patch, y_patch))
-        x_topleft, y_topleft = src.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
-        x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
-
-    return arr, full_shape, x_shift, y_shift
-
-def get_image_patch(img_path, x_shift, y_shift, patchsize, x_rand=600, y_rand=400):
-    x_patch = patchsize[0]
-    y_patch = patchsize[1]
-
-    with rasterio.open(img_path) as src:
-        arr = src.read(window=Window(col_off=x_rand+x_shift, row_off=y_rand+y_shift, width=x_patch, height=y_patch))
-
-    return arr
+import random
 
 def ensure_same_days(imgs_paths, labels_paths):
     """
@@ -96,8 +47,10 @@ def ensure_same_days(imgs_paths, labels_paths):
         label_day = label_file[6:14]
         label_specs[f'{label_station}_{label_cam}_{label_day}'] = label_path
 
+
     # intersection
     both_available = [val for val in img_specs.keys() if val in label_specs.keys()]
+
     for key in img_specs:
         if key in both_available:
             imgs_path_new.append(img_specs[key])
@@ -106,10 +59,9 @@ def ensure_same_days(imgs_paths, labels_paths):
         if key in both_available:
             labels_path_new.append(label_specs[key])
 
+
     return imgs_path_new, labels_path_new
 
-
-'''
 def get_full_resolution_label(image, label):
     """
     should return 4000, 6000 label, where missing values were filled up with 3 (no data),
@@ -139,12 +91,10 @@ def get_full_resolution_label(image, label):
     """
 
     return label_full
-'''
 
-'''
 def plot_array(img):
     plt.imshow(np.transpose(img, (1,2,0)))
-'''
+
 
 '''
 def plot_overlay(x, y):
@@ -167,9 +117,9 @@ def plot_overlay(x, y):
     full_mask = np.stack((mask_sq, mask_sq, mask_sq))  # to use for 3D image
 
 
-
+    
     # Use the syntax array[array_condition] = value to replace each element in array with value if it meets the array_condition.
-
+    
 
     x[full_mask] = y[mask]
 
@@ -181,18 +131,18 @@ class DischmaSet_segmentation():
     def __init__(self, root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_1', 'Buelenberg_2'], mode='train') -> None:
         """
         get lists with filenames from corresponding input cams
+        note: working with downsampled images (for now)
         some definitions of variables (inputs)
         two lists:
-            - one contains filepaths with composite images
-            - the other contains filepaths with labels from tif files
-
+            - one contains filepaths with composite images (downsampled)
+            - the other contains filepaths with labels (from tif files) (downsampled)
+            (for all imgs in camstat list -> loop!)
         TODO: define data augmentation pipeline
         """
         self.root = root
         self.stat_cam_lst = stat_cam_lst
         self.mode = mode
 
-        self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to read everytime
         self.patch_size = (400, 600)
         self.patch_size = (256, 256)
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both are divisible by 32 !!!
@@ -224,7 +174,7 @@ class DischmaSet_segmentation():
         for camstation in stat_cam_lst:
             pass
         """
-
+        
     def __len__(self):
         """
         returns the number of VALID samples in dataset
@@ -239,51 +189,9 @@ class DischmaSet_segmentation():
         img_path = self.compositeimage_path_list[idx]
         label_path = self.label_path_list[idx]
 
-        # TODO:
-        # read in metadata of label
-        # transform image and label according to this metadata
-        # normalize image
-        # ev data augmentation 
-        # return image, label (at correct place in window)
-        # make sure to only read patch, not full image
+        image = rasterio.open(img_path)
+        label = rasterio.open(label_path)
 
-        # xshift, yshift = get_metadata(label_path) - later to only open it once
-        
-        label_shape = rasterio.open(label_path).shape
-        
-        xrand = random.randint(0, label_shape[0] - self.patch_size[0])
-        yrand = random.randint(0, label_shape[1] - self.patch_size[1])
-
-        lbl_patch, lbl_shape_full, xshift, yshift = get_label_patch_and_shape_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
-        img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
-        print()
-
-
-        '''image = rasterio.open(img_path)  # fast
-        label = rasterio.open(label_path)  # fast
-        i = image.read()  # slow
-        l = label.read()  # slow'''
-
-        return img_patch, lbl_patch
-        print()
-
-        '''plt.figure()
-        f, axarr = plt.subplots(2, 1) #subplot(r,c) provide the no. of rows and columns
-        axarr[0].set_title(f'Image Patch {self.patch_size}')
-        axarr[0].imshow(np.transpose(img_patch, (1,2,0)))
-        axarr[1].set_title(f'Label Patch {self.patch_size}')
-        axarr[1].imshow(np.transpose(lbl_patch, (1,2,0)))
-
-        plt.figure()
-        f, axarr = plt.subplots(2, 1) #subplot(r,c) provide the no. of rows and columns
-        axarr[0].set_title(f'Full Image {self.original_shape}')
-        axarr[0].imshow(np.transpose(i, (1,2,0)))
-        axarr[1].set_title(f'Full Label {lbl_shape_full}')
-        axarr[1].imshow(np.transpose(l, (1,2,0)))
-        print()
-        '''
-
-        '''
         # consider windowed reading and writing: https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html#windowrw
         # problematic with getting full resolution of label while considering metadata and knowing exactly which patch
         # ev possible, but computationally expensive
@@ -306,29 +214,26 @@ class DischmaSet_segmentation():
         img = crop_random_patch(img, self.patch_size)
         lbl = crop_random_patch(lbl, self.patch_size)
 
-
+        
         return img, lbl
-        '''
 
-'''
 def crop_center(arr, cropy, cropx):
     ch, y,x = arr.shape
     startx = x//2-(cropx//2)
     starty = y//2-(cropy//2)    
     return arr[:, starty:starty+cropy, startx:startx+cropx]
-'''
 
 def crop_random_patch(array, patch_size):
     y_max = array.shape[1]
     x_max = array.shape[2]
 
-    x_patch = patch_size[0]
-    y_patch = patch_size[1]
+    x_step = patch_size[0]
+    y_step = patch_size[1]
     
-    x_start = random.randrange(x_max-x_patch)
-    y_start = random.randrange(y_max-y_patch)
+    x_start = random.randrange(x_max-x_step)
+    y_start = random.randrange(y_max-y_step)
 
-    array_patch = array[:, y_start:y_start+y_patch, x_start:x_start+x_patch]
+    array_patch = array[:, y_start:y_start+y_step, x_start:x_start+x_step]
 
     return array_patch
 
@@ -340,6 +245,7 @@ if __name__=='__main__':
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all, mode='val')
     img, lbl = x.__getitem__(11)
+
     # img = img/255.
 
     # to overlay images
