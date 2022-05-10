@@ -189,7 +189,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 y_pred_binary = pred_binary.cpu().tolist()
 
                 y_true_total.extend(y_true)
-                y_pred_probab_total.extend(y_pred_probab_total)
+                y_pred_probab_total.extend(y_pred_probab)
                 y_pred_binary_total.extend(y_pred_binary)
 
                 # losses
