@@ -39,6 +39,7 @@ def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand=3000, y_rand=20
         arr = src.read(window=Window(x_rand, y_rand, x_patch, y_patch))
         x_topleft, y_topleft = src.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
         x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
+    arr[arr==3] = 2
 
     return arr, full_shape, x_shift, y_shift
 
@@ -166,8 +167,9 @@ class DischmaSet_segmentation():
 
         # get image and label patches
         lbl_patch, lbl_shape_full, xshift, yshift = get_label_patch_and_shape_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
-        img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
 
+        img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
+        img_patch = img_patch/255
         # img = image.read()/255.  # should return 4000, 6000 image, vals between 0 and 1
         # ev do some data augmentation
 
@@ -198,7 +200,9 @@ if __name__=='__main__':
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all, mode='val')
-    img, lbl = x.__getitem__(11)
+    
+    for n in range(100):
+        img, lbl = x.__getitem__(n)
 
     """
     # to overlay images
