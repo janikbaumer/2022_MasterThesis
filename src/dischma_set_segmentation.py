@@ -14,7 +14,10 @@ import rasterio
 from rasterio.plot import show
 from PIL import Image
 import random
+import warnings
+import rasterio
 
+warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
 ############ REPRODUCIBILITY ############
 
@@ -118,6 +121,7 @@ class DischmaSet_segmentation():
         self.root = root
         self.stat_cam_lst = stat_cam_lst
         self.mode = mode
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to read everytime
         self.patch_size = (256, 256)
@@ -142,6 +146,19 @@ class DischmaSet_segmentation():
             for file in self.file_list_camstat_lbl:
                 self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
+
+        # data augmentation
+        self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
+            transforms.RandomCrop(size=(int(0.8*4000), int(0.8*6000))),
+            transforms.RandomHorizontalFlip(p=1),  # here p=1, as p=0.5 will be applied for whole RandomApply block
+            transforms.GaussianBlur(kernel_size=5),
+            # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2)  # might make sense (trees etc can change colors over seasons)
+            ]), p=0.5)
+        
+        self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+
+
 
     def __len__(self):
         """
@@ -170,8 +187,12 @@ class DischmaSet_segmentation():
 
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
-        # img = image.read()/255.  # should return 4000, 6000 image, vals between 0 and 1
-        # ev do some data augmentation
+        
+        img = torch.Tensor(img_patch).to(self.device)
+        lbl = torch.Tensor(lbl_patch).to(self.device)
+
+        img = self.train_augmentation(img)
+        img = self.normalize(img)
 
         '''
         plt.figure()
@@ -190,7 +211,7 @@ class DischmaSet_segmentation():
         print()
         '''
 
-        return img_patch, lbl_patch
+        return img, lbl
 
 
 if __name__=='__main__':
@@ -201,7 +222,7 @@ if __name__=='__main__':
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all, mode='val')
     
-    for n in range(100):
+    for n in range(30, 100):
         img, lbl = x.__getitem__(n)
 
     """
