@@ -22,6 +22,11 @@ import segmentation_models_pytorch as smp
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 
 import cv2
+import warnings
+import rasterio
+from tqdm import tqdm
+
+warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
 def save_x_y(x, y):
     """
@@ -40,12 +45,35 @@ def save_x_y(x, y):
 def print_grid(x, y, batchsize, batch_iteration):
     x = x.cpu()
     y = y.cpu()
-    # print(y)
     y_reshaped = y.reshape(2, -1).numpy()
     grid_img = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
     plt.title(f'batch iteration: {batch_iteration}\n{y_reshaped[0]}\n{y_reshaped[1]}')
     plt.imshow(grid_img.permute(1, 2, 0))
     plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{batch_iteration}')
+
+
+def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
+    acc = accuracy_score(y_true=yt, y_pred=ypred)
+    prec = precision_score(y_true=yt, y_pred=ypred)
+    rec = recall_score(y_true=yt, y_pred=ypred)
+    f1 = f1_score(y_true=yt, y_pred=ypred)
+    cm = confusion_matrix(y_true=yt, y_pred=ypred)
+
+    if LOGGING:
+        wandb.log({
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/accuracy' : acc,
+            f'{ph}/precision (isFoggy is True)' : prec,
+            f'{ph}/recall (isFoggy is True)' : rec,  # this should be high !!! (to catch all (foggy) images)
+            f'{ph}/F1-score (isFoggy is True)' : f1,
+            f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (no snow)', 'class 1 (snow)']),
+            # f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            'n_epoch' : ep,
+            'batch_iteration' : bi})
+
+    return acc, prec, rec, f1
+
+
 
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
@@ -80,15 +108,15 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 dset = dset_val
 
 
-            for x, y in dloader_train:
+            for x, y in tqdm(dloader):
                 batch_iteration[phase] += 1
                 #save_x_y(x, y)
 
-                x = x.to(device)
-                y = y.to(device)
+                #x = x.to(device)
+                #y = y.to(device)
 
-                x = x.float()
-                y = y.long()
+                #x = x.float()
+                #y = y.long()
 
                 """
                 # plot some batches
@@ -98,8 +126,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 #    print_grid(x,y, BATCH_SIZE, batch_iteration)
                 """
 
-                norm = torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-                x = norm(x)
+                #norm = torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+                #x = norm(x)
 
                 # If your targets contain the class indices already, you should remove the channel dimension:
                 # https://discuss.pytorch.org/t/only-batches-of-spatial-targets-supported-non-empty-3d-tensors-but-got-targets-of-size-1-1-256-256/49134
@@ -110,7 +138,12 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 with torch.set_grad_enabled(phase == 'train'):
 
                     y_pred_logits = model(x)  # torch.Size([8, 3, 256, 256])  # logits, not probabilty !
+
+                    # for metrics, get only argmax of first two cols (0 and 1), ignore 2nd col (with logits for no data)
                     y_pred_binary = y_pred_logits.argmax(axis=1, keepdim=False)  # for each batch image, choose class with highest probability
+
+                    y_pred_logits_data = y_pred_logits[:, 0:-1, :, :]
+                    y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 or 1 -> predict always either 0 or 1
 
                     loss = criterion(y_pred_logits, y)  # note: masking no data values is implicitly applied by setting weight for class 2 to zero 
 
@@ -123,31 +156,41 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 get ytrue, ypred, ypredbinary (all as lists/arrays) and add (extend) to total list/arr -> evaluate metrics
                 """
                 # STATS
-                y_true_lst = list(y.flatten().cpu().numpy())
-                y_pred_binary_lst = list(y_pred_binary.flatten().cpu().numpy())
 
+                y_true_flat = y.flatten()
+                y_pred_flat_binary = y_pred_binary_data.flatten()
+
+                y_true_data = y_true_flat[y_true_flat != 2]
+                y_pred_data = y_pred_flat_binary[y_true_flat != 2]
+
+                """
+                y_true_arr = np.array(y.flatten().cpu().numpy())  # contains 0, 1, 2
+                y_pred_binary_arr = np.array(y_pred_binary_data.flatten().cpu().numpy())  # contains 0, 1
+                # remove values in GT and in pred where the GT is no data (== 2)
+                YT = y_true_arr[y_true_arr != 2]
+                YP = y_pred_binary_arr[y_true_arr != 2]
                 y_true_arr = np.array(y.flatten().cpu().numpy())
-                y_pred_binary_arr = np.array(y_pred_binary.flatten().cpu().numpy())
-
-
-                y_true_total.extend(y_true_lst)
-                # y_pred_probab_total.extend(...)
-                y_pred_binary_total.extend(y_pred_binary_lst)
-
+                y_pred_ternary_arr = np.array(y_pred_binary.flatten().cpu().numpy())
                 # remove values where either no data in GT or no data was predicted
-
                 # remove values in GT and in pred where the GT is no data
                 # after this block, there will still be no data values in yp_data_in_GT
                 yt_data_in_GT = y_true_arr[y_true_arr != 2]
-                yp_data_in_GT = y_pred_binary_arr[y_true_arr != 2]
-
+                yp_data_in_GT = y_pred_ternary_arr[y_true_arr != 2]
                 # remove values in GT and in pred where the prediction is no data (resp. where prediction was 2)
                 yt_data_only = yt_data_in_GT[yp_data_in_GT != 2]
                 yp_data_only = yp_data_in_GT[yp_data_in_GT != 2]
                 # TODO calculate metrics from yt_data and yp_data
+                y_true_lst = list(yt_data_only)
+                y_pred_binary_lst = list(yp_data_only)
+                """
 
-                yt = yt_data_only
-                yp = yp_data_only
+                y_true_total.extend(y_true_data)
+                # y_pred_probab_total.extend(...)
+                y_pred_binary_total.extend(y_pred_data)
+
+
+                #yt = yt_data_only
+                #yp = yp_data_only
 
                 # LOSSES
                 batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
@@ -160,29 +203,22 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over these {LOG_EVERY} batch iterations): {loss}')
 
-                        # TODO: get some metrics
-                        # TODO: log some metrics
-                        """
-                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
-                        """
+                        
 
                         running_loss = 0
 
                 if phase == 'val':
                     val_it_counter += 1
 
-                    if batch_iteration[phase]%len/(dloader) == 0:
+                    if batch_iteration[phase]%len(dloader) == 0:
                         loss = running_loss / len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
 
-                        # TODO: get some metrics
-                        # TODO: log some metrics
-
-                        """
-                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
-                        """
+                        
 
             if phase == 'train':
                 if scheduler is not None:
@@ -235,7 +271,7 @@ args = parser.parse_args()
 LOGGING = False
 # logging
 if LOGGING:
-    wandb.init(project="snow_segmentation", entity="jbaumer", config=args)
+    wandb.init(project="model_snow_segmentation", entity="jbaumer", config=args)
 
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -300,8 +336,6 @@ criterion = nn.CrossEntropyLoss(weight=torch.Tensor([1, 1, 0]).to(device), reduc
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)  # TODO ev add momentum
 
 exp_lr_scheduler = None
-
-print()
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
 
