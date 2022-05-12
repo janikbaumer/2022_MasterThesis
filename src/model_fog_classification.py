@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader, random_split
 from torch import nn
 from torchvision import models
 from torch.optim import lr_scheduler
-
+from tqdm import tqdm
 from dischma_set_classification import DischmaSet_classification
 
 print('imports done')
@@ -144,7 +144,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             y_pred_binary_total = []
 
 
-            for x, y in dloader:
+            for x, y in tqdm(dloader):
                 """
                 batch_iteration += 1
                 """
