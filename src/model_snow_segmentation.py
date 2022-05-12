@@ -78,10 +78,10 @@ def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
         wandb.log({
             f'{ph}/loss' : batch_it_loss,
             f'{ph}/accuracy' : acc,
-            f'{ph}/precision (isFoggy is True)' : prec,
-            f'{ph}/recall (isFoggy is True)' : rec,  # this should be high !!! (to catch all (foggy) images)
-            f'{ph}/F1-score (isFoggy is True)' : f1,
-            f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (no snow)', 'class 1 (snow)']),
+            f'{ph}/precision' : prec,
+            f'{ph}/recall' : rec,  # this should be high !!! (to catch all (foggy) images)
+            f'{ph}/F1-score' : f1,
+            # f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (no snow)', 'class 1 (snow)']),  # this line uses extremely much CPU !!! - breaks program
             # f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
             'n_epoch' : ep,
             'batch_iteration' : bi})
@@ -157,9 +157,9 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                     y_pred_logits = model(x)  # torch.Size([8, 3, 256, 256])  # logits, not probabilty !
 
-                    # for metrics, get only argmax of first two cols (0 and 1), ignore 2nd col (with logits for no data)
-                    y_pred_binary = y_pred_logits.argmax(axis=1, keepdim=False)  # for each batch image, choose class with highest probability
+                    #y_pred_binary = y_pred_logits.argmax(axis=1, keepdim=False)  # for each batch image, choose class with highest probability
 
+                    # for metrics, get only argmax of first two cols (0 and 1), ignore 2nd col (with logits for no data)
                     y_pred_logits_data = y_pred_logits[:, 0:-1, :, :]  # consider all logits excepts for last class (no data) - consider logits for class 0 and 1
                     y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 or 1 -> predict always either 0 or 1
 
@@ -297,7 +297,7 @@ parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and i
 
 args = parser.parse_args()
 
-LOGGING = False
+LOGGING = True
 # logging
 if LOGGING:
     wandb.init(project="model_snow_segmentation", entity="jbaumer", config=args)
