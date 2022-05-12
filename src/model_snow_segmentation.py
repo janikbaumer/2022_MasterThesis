@@ -12,7 +12,7 @@ import numpy as np
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
 
 from torch.utils.data import DataLoader, random_split
-from torch import nn
+from torch import import_ir_module, nn
 from torchvision import models
 from torch.optim import lr_scheduler
 
@@ -25,6 +25,12 @@ import cv2
 import warnings
 import rasterio
 from tqdm import tqdm
+
+from torchmetrics import Accuracy as ascore
+from torchmetrics import Precision as pscore
+from torchmetrics import Recall as rscore
+from torchmetrics import F1Score as f1score
+
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
@@ -53,11 +59,20 @@ def print_grid(x, y, batchsize, batch_iteration):
 
 
 def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
+    
+    """
     acc = accuracy_score(y_true=yt, y_pred=ypred)
     prec = precision_score(y_true=yt, y_pred=ypred)
     rec = recall_score(y_true=yt, y_pred=ypred)
     f1 = f1_score(y_true=yt, y_pred=ypred)
     cm = confusion_matrix(y_true=yt, y_pred=ypred)
+    """
+
+    acc = ascore()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
+    prec = pscore()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
+    rec = rscore()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
+    f1 = f1score()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
+    # cm = confusion_matrix(y_true=yt, y_pred=ypred)
 
     if LOGGING:
         wandb.log({
@@ -96,7 +111,10 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             y_true_total = []
             y_pred_probab_total = []
             y_pred_binary_total = []
-    
+
+            y_true_total = torch.Tensor().to(device)
+            y_pred_binary_total = torch.Tensor().to(device)
+
             if phase == 'train':
                 model.train()
                 dloader = dloader_train
@@ -142,7 +160,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     # for metrics, get only argmax of first two cols (0 and 1), ignore 2nd col (with logits for no data)
                     y_pred_binary = y_pred_logits.argmax(axis=1, keepdim=False)  # for each batch image, choose class with highest probability
 
-                    y_pred_logits_data = y_pred_logits[:, 0:-1, :, :]
+                    y_pred_logits_data = y_pred_logits[:, 0:-1, :, :]  # consider all logits excepts for last class (no data) - consider logits for class 0 and 1
                     y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 or 1 -> predict always either 0 or 1
 
                     loss = criterion(y_pred_logits, y)  # note: masking no data values is implicitly applied by setting weight for class 2 to zero 
@@ -184,9 +202,11 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 y_pred_binary_lst = list(yp_data_only)
                 """
 
-                y_true_total.extend(y_true_data)
-                # y_pred_probab_total.extend(...)
-                y_pred_binary_total.extend(y_pred_data)
+                #y_true_total.append(y_true_data)
+                #y_pred_binary_total.append(y_pred_data)
+
+                y_true_total = torch.cat((y_true_total, y_true_data), 0)
+                y_pred_binary_total = torch.cat((y_pred_binary_total, y_pred_data), 0)
 
 
                 #yt = yt_data_only
@@ -200,14 +220,23 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     train_it_counter += 1
                     LOG_EVERY = 50
                     if (batch_iteration[phase]%LOG_EVERY) == 0:
+
+                        # convert to torch tensors (with each a single elements)
+                        #y_true_total = torch.cat(y_true_total, 0)
+                        #y_pred_binary_total = torch.cat(y_pred_binary_total, 0)  # flatten the the list of torch tensors a a flat torch tensor of elements
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over these {LOG_EVERY} batch iterations): {loss}')
 
                         acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
                         
-
                         running_loss = 0
+
+                        # reconvert to list of tensors (to be able to use append above)
+                        # todo: does not work, takes too much memory !!!
+                        #y_true_total = list(y_true_total)
+                        #y_pred_binary_total = list(y_pred_binary_total)
+
 
                 if phase == 'val':
                     val_it_counter += 1
@@ -225,8 +254,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     scheduler.step()
                     # scheduler.print_lr()
             
-            epoch_loss = running_loss / len(dset)
-            print(f'epoch loss in {phase} phase: {epoch_loss}')
+            # epoch_loss = running_loss / len(dset)
+            # print(f'epoch loss in {phase} phase: {epoch_loss}')
 
         print()
     
@@ -308,7 +337,7 @@ dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
 # class 0: is not foggy
 # class 1: is foggy
-# class 3: no data
+# class 2/3: no data
 
 # TODO get balancedness of dset
 
@@ -335,7 +364,9 @@ out = model(x_try)
 criterion = nn.CrossEntropyLoss(weight=torch.Tensor([1, 1, 0]).to(device), reduction='mean')  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)  # TODO ev add momentum
 
-exp_lr_scheduler = None
+if LR_SCHEDULER != 'None':
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
+elif LR_SCHEDULER == 'None':
+    exp_lr_scheduler = None
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
-
