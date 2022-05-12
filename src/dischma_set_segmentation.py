@@ -1,21 +1,22 @@
 import os
-from os.path import isfile, join
 import pandas as pd
 import torch
 import torchvision
-from torchvision.transforms import functional as F
-from torchvision import transforms
 import numpy as np
-from matplotlib import pyplot as plt
 import rasterio
-from rasterio.windows import Window
-from rasterio.plot import show
 import rasterio
-from rasterio.plot import show
-from PIL import Image
 import random
 import warnings
 import rasterio
+
+from torchvision.transforms import functional as F
+from torchvision import transforms
+from matplotlib import pyplot as plt
+from rasterio.plot import show
+from rasterio.windows import Window
+from os.path import isfile, join
+from PIL import Image
+from time import time
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
@@ -33,7 +34,7 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ['PYTHONHASHSEED'] = str(random_seed)
 
-def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand=3000, y_rand=2000):
+def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand, y_rand):
     x_patch = patchsize[0]
     y_patch = patchsize[1]
 
@@ -42,6 +43,8 @@ def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand=3000, y_rand=20
         arr = src.read(window=Window(x_rand, y_rand, x_patch, y_patch))
         x_topleft, y_topleft = src.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
         x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
+    arr[arr==85] = 1
+    arr[arr==255] = 2
     arr[arr==3] = 2
 
     return arr, full_shape, x_shift, y_shift
@@ -147,9 +150,15 @@ class DischmaSet_segmentation():
                 self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
 
+
+        #with open('label_path_list.txt', 'w') as f:
+        #    for item in self.label_path_list:
+        #        f.write("%s\n" % item)
+
+
         # data augmentation
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
-            transforms.RandomCrop(size=(int(0.8*4000), int(0.8*6000))),
+            # transforms.RandomCrop(size=(int(0.8*self.patch_size[0]), int(0.8*self.patch_size[1]))),  # already cropped when choosing patches
             transforms.RandomHorizontalFlip(p=1),  # here p=1, as p=0.5 will be applied for whole RandomApply block
             transforms.GaussianBlur(kernel_size=5),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
@@ -174,6 +183,7 @@ class DischmaSet_segmentation():
         img_path = self.compositeimage_path_list[idx]
         label_path = self.label_path_list[idx]
 
+
         # TODO:
         # normalize image
         # data augmentation 
@@ -187,8 +197,8 @@ class DischmaSet_segmentation():
 
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
-        
-        img = torch.Tensor(img_patch).to(self.device)
+
+        img = torch.as_tensor(img_patch).to(self.device)
         lbl = torch.Tensor(lbl_patch).to(self.device)
 
         img = self.train_augmentation(img)
@@ -210,8 +220,9 @@ class DischmaSet_segmentation():
         axarr[1].imshow(np.transpose(l, (1,2,0)))
         print()
         '''
-
-        return img, lbl
+        #print(label_path)
+        #print(label_shape, self.patch_size)
+        return img.float(), lbl.long()
 
 
 if __name__=='__main__':
