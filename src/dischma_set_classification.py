@@ -92,7 +92,7 @@ class DischmaSet_classification():
 
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
             transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
-            transforms.RandomHorizontalFlip(p=1),  # here p=1, as p=0.5 will be applied for whole RandomApply block
+            transforms.RandomHorizontalFlip(p=0.5),  # here p=1, as p=0.5 will be applied for whole RandomApply block
             transforms.GaussianBlur(kernel_size=5),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2)  # might make sense (trees etc can change colors over seasons)
@@ -143,6 +143,13 @@ class DischmaSet_classification():
                         img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
                         self.is_foggy.append(int(img_is_foggy))
                         self.path_list_valid.append(full_path_img)
+                
+                if self.mode == 'train_manual' and raw_img_name[0:4] == self.YEAR_VAL and raw_img_name[4:6] not in self.MONTHS_VAL:
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
 
                 if self.mode == 'val' and raw_img_name[0:4] == self.YEAR_VAL and raw_img_name[4:6] in self.MONTHS_VAL:  # use manual labels
                     if os.path.isfile(self.full_path_manual_labels):
