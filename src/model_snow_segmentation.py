@@ -6,6 +6,7 @@ import os
 import wandb
 import ast
 import random
+import math
 
 from time import time
 import numpy as np
@@ -31,6 +32,7 @@ from torchmetrics import Precision as pscore
 from torchmetrics import Recall as rscore
 from torchmetrics import F1Score as f1score
 
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
@@ -38,8 +40,6 @@ def save_x_y(x, y):
     """
     x.shape: torch.Size([batchsize, 3, 4000, 5984])
     y.shape: torch.Size([batchsize, 1, 4000, 6000])
-    # note: x image will get very large
-
     """
     plt.imsave(fname='../test_x_03.png', arr=np.transpose(x[0].numpy(), (1,2,0)))
     y[y == 1] == 255  # snow -> white
@@ -51,10 +51,14 @@ def save_x_y(x, y):
 def print_grid(x, y, batchsize, batch_iteration):
     x = x.cpu()
     y = y.cpu()
-    y_reshaped = y.reshape(2, -1).numpy()
-    grid_img = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
-    plt.title(f'batch iteration: {batch_iteration}\n{y_reshaped[0]}\n{y_reshaped[1]}')
-    plt.imshow(grid_img.permute(1, 2, 0))
+    grid_img_x = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
+    grid_img_y = torchvision.utils.make_grid(y.float(), nrow=int(batchsize/2), normalize=True)
+    plt.figure()
+    f, axarr = plt.subplots(2,1)
+    axarr[0].imshow(grid_img_x.permute(1,2,0))
+    axarr[1].imshow(grid_img_y.permute(1,2,0))
+    # plt.show()
+    # plt.title(f'batch iteration: {batch_iteration}\n{y_reshaped[0]}\n{y_reshaped[1]}')
     plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{batch_iteration}')
 
 
@@ -68,11 +72,21 @@ def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
     cm = confusion_matrix(y_true=yt, y_pred=ypred)
     """
 
+    """
     acc = ascore()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
     prec = pscore()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
     rec = rscore()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
     f1 = f1score()(yt.type(torch.IntTensor), ypred.type(torch.IntTensor)).item()
     # cm = confusion_matrix(y_true=yt, y_pred=ypred)
+    """
+
+    accuracy_score, precision_score, recall_score, f1_score
+    
+    acc = accuracy_score(yt.cpu(), ypred.cpu())
+    prec = precision_score(yt.cpu(), ypred.cpu())
+    rec = recall_score(yt.cpu(), ypred.cpu())
+    f1 = f1_score(yt.cpu(), ypred.cpu())
+    # cm = confusion_matrix(y_true=yt.cpu(), y_pred=ypred.cpu())
 
     if LOGGING:
         wandb.log({
@@ -127,6 +141,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
 
             for x, y in tqdm(dloader):
+                #print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
+
                 batch_iteration[phase] += 1
                 #save_x_y(x, y)
 
@@ -326,8 +342,14 @@ PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNI
 print()
 
 # create datasets and dataloaders
-dset_train = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+#dset_train = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+#dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+
+dset_full = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+
+# SPLIT TRAIN AND VALIDATION (80% VS 20%)
+dset_train, dset_val = random_split(dset_full, (int(len(dset_full)*0.8), math.ceil(len(dset_full)*0.2)))
+
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 len_dset_train, len_dset_val = len(dset_train), len(dset_val)
