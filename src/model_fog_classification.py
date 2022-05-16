@@ -1,3 +1,4 @@
+from re import T
 import torch
 import torchvision
 import argparse
@@ -37,7 +38,7 @@ print('imports done')
     # check data augmentation (horizontal flipping, cropping to eg 80-90%)), ev more
         # issue found: mean of image net could not be used for our data (mean was not 0 after tf)
         # TODO easier solution: make sure imgs are in range (0,1) not (0,255) -> check mean and std
-        # assumption: learned features from resnet can also be used for our imgaes (same pixel distribution)
+        # assumption: learned features from resnet can also be used for our images (same pixel distribution)
         # (might be slightly wrong, as I am using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
 
         # solution: calculate mean every time and for each image to be computed ->
@@ -56,25 +57,33 @@ print('imports done')
 
 ################# FUNCTIONS ######################
 
-def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
+def get_balance(dset):
+    lst = []
+    for ele in dset:
+        lst.append(dset[ele][1])
+
+
+def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
+    
     acc = accuracy_score(y_true=yt, y_pred=ypred)
     prec = precision_score(y_true=yt, y_pred=ypred)
     rec = recall_score(y_true=yt, y_pred=ypred)
     f1 = f1_score(y_true=yt, y_pred=ypred)
-    cm = confusion_matrix(y_true=yt, y_pred=ypred)
 
-    wandb.log({
-        f'{ph}/loss' : batch_it_loss,
-        f'{ph}/accuracy' : acc,
-        f'{ph}/precision (isFoggy is True)' : prec,
-        f'{ph}/recall (isFoggy is True)' : rec,  # this should be high !!! (to catch all (foggy) images)
-        f'{ph}/F1-score (isFoggy is True)' : f1,
-        f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
-        # f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
-        'n_epoch' : ep,
-        'batch_iteration' : bi})
+    if LOGGING:
+        wandb.log({
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/accuracy' : acc,
+            f'{ph}/precision' : prec,
+            f'{ph}/recall' : rec,  # this should be high !!! (to catch all foggy images)
+            f'{ph}/F1-score' : f1,
+            f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+            # f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            'n_epoch' : ep,
+            'batch_iteration' : bi})
+        
+        print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
-    return acc, prec, rec, f1
 
 def get_train_val_split(dset_full):
     print('splitting in train/test...')
@@ -84,15 +93,15 @@ def get_train_val_split(dset_full):
     dset_train, dset_val = random_split(dset_full, [len_train, len_val])  # Split Pytorch tensor
     return dset_train, dset_val
 
-def print_grid(x, y, batchsize, batch_iteration):
+def print_grid(x, y, batchsize, bi):
     x = x.cpu()
     y = y.cpu()
     # print(y)
     y_reshaped = y.reshape(2, -1).numpy()
     grid_img = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
-    plt.title(f'batch iteration: {batch_iteration}\n{y_reshaped[0]}\n{y_reshaped[1]}')
+    plt.title(f'batch iteration: {bi}\n{y_reshaped[0]}\n{y_reshaped[1]}')
     plt.imshow(grid_img.permute(1, 2, 0))
-    plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{batch_iteration}')
+    plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{bi}')
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
@@ -107,42 +116,25 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
         for phase in ['train', 'val']:  # in each epoch, do training and validation
             print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
 
-            train_it_counter, val_it_counter = 0, 0
-
             if phase == 'train':
                 model.train()
                 dloader = dloader_train
-                dset = dset_train
-                """
-                len_dset_current = len(dset_train)
-                """
+                
             else:
                 model.eval()
                 dloader = dloader_val
-                dset = dset_val
-                """
-                len_dset_current = len(dset_val)
-                """
 
             running_loss = 0  # loss (to be updated during batch iteration)
             batch_it_loss = 0
 
-            """
-            y_true_batch_it, y_pred_batch_it, y_probab_batch_it = [], [], []
-            # cm_tot = np.zeros((2,2), dtype='int64')
-            # y_true_total, y_pred_total = [], []
-            """
             y_true_total = []
             y_pred_probab_total = []
             y_pred_binary_total = []
 
 
             for x, y in tqdm(dloader):
-                """
-                batch_iteration += 1
-                """
-                batch_iteration[phase] += 1
 
+                batch_iteration[phase] += 1
 
                 # move to GPU
                 x = x.to(device)
@@ -171,12 +163,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         optimizer.step()  # update params
 
                 # stats
-                """
-                y_true = y.cpu().tolist()
-                y_probab = y_probab.cpu().tolist()
-                y_pred = pred_binary.cpu().tolist()
-                """
-                predictions = pred.cpu().detach().numpy()
+
                 y_true = y.cpu().tolist()
                 y_pred_probab = y_probab.cpu().tolist()  # prob for class one
                 y_pred_binary = pred_binary.cpu().tolist()
@@ -190,19 +177,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 running_loss += batch_loss
 
                 """
-                # get losses
-                batch_loss = loss.item() * x.size(0)  # loss of whole batch, loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg
-                running_loss += batch_loss
-                batch_it_loss += batch_los
-
-
-                y_true_batch_it.extend(y_true)
-                y_probab_batch_it.extend(y_probab)
-                y_pred_batch_it.extend(y_pred)
-
-                # y_true_total.extend(y_true)
-                # y_pred_total.extend(y_pred)
-
                 # array([[a, b],
                 #        [c, d]])
                 # a: tn (0 true, 0 predicted)  # negative is predicted, and the prediction is true
@@ -211,56 +185,29 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 # d: tp (1 true, 1 predicted)  # positive is predicted, and the prediction is true
                 # to extract all values:
                 # (tn, fp, fn, tp) = cm.ravel()
-
-                ##### cm_current = confusion_matrix(y_true, y_pred)
-                ##### cm_tot = cm_tot + cm_current  # accumulate confusion matrices
-
-                # batch_iteration += 1
-
                 """
 
                 if phase == 'train':
-                    train_it_counter += 1
-                    LOG_EVERY = 200
                     if (batch_iteration[phase]%LOG_EVERY) == 0:
-                        """
-                        batch_it_loss = batch_it_loss/LOG_EVERY
-                        """
                         loss = running_loss/LOG_EVERY
-                        """print(f'batch iteration: {batch_iteration} / {len(dloader)} ... batch loss ({phase}), avg over these 200 batch iterations: ', batch_it_loss)"""
-                        print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over these {LOG_EVERY} batch iterations): {loss}')
+                        print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over {LOG_EVERY} batch iterations): {loss}')
 
-                        # get metrics
-                        """acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_batch_it, ypred=y_pred_batch_it, yprob=y_probab_batch_it, ep=epoch, batch_it_loss=batch_it_loss, ph=phase, bi=batch_iteration)"""
-                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
-                        print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
+                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
 
                         running_loss = 0
 
-                        """
-                        batch_it_loss = 0
-                        y_true_batch_it, y_pred_batch_it = [], []
-                        """
-
 
                 if phase == 'val':
-                    val_it_counter += 1
-
                     if batch_iteration[phase]%len(dloader) == 0:
-                        """batch_it_loss = batch_it_loss/len(dloader)"""
                         loss = running_loss/len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
-                        # get metrics
-                        """acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_batch_it, ypred=y_pred_batch_it, yprob=y_probab_batch_it, ep=epoch, batch_it_loss=batch_it_loss, ph=phase, bi=batch_iteration)"""
-                        acc, prec, rec, f1 = get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
-                        print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
-            if phase == 'train':
+                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
+            
+            if phase == 'train':  # at end of epoch (training, could also be end of validation)
                 if scheduler is not None:
                     scheduler.step()
-                    # scheduler.print_lr()
-
-        print()
 
     time_end = time()
     time_elapsed = time_end - time_start
@@ -284,7 +231,6 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ['PYTHONHASHSEED'] = str(random_seed)
 
-
 ############ ARGPARSERS ############
 
 parser = argparse.ArgumentParser(description='Run pretrained finetuning.')
@@ -300,7 +246,9 @@ parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and i
 args = parser.parse_args()
 
 # logging
-wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
+LOGGING = True
+if LOGGING:
+    wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -321,55 +269,55 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 
 N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
+LOG_EVERY = 200
 
-
-# create datasets and dataloaders
-###dset(_full) = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
-#dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-#dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-
-# dset_train, dset_val = get_train_val_split(dset)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
+########################### create datasets and dataloaders ###########################
 
 # TODO: use only handlabeled data for dset full
     # sep. into train and val
-    # use 1 camstat for now
-    # (BB1)
+    # use 1 camstat for now (BB1)
 
-    # to try with only handlabeled data
-    # dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-    # dset_train, dset_val = get_train_val_split(dset_full)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
 
 # dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 # dset_train, dset_val = get_train_val_split(dset_full)
 
-dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+# dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+# dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+# dset_train, dset_val = get_train_val_split(dset)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
+
+"""
+# to try with only handlabeled data
+dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+dset_train, dset_val = get_train_val_split(dset_full)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
+"""
+#dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+#dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+dset_train, dset_val = get_train_val_split(dset_full)
 
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
-dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
+dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
-# class 0: is not foggy
-# class 1: is foggy
-n_class_0, n_class_1 = dset_train.get_balancedness()
-n_tot = n_class_0 + n_class_1
-w0, w1 = n_class_1/n_tot, n_class_0/n_tot
+# n0, n1 = get_balance(dset_train)
 
 if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
     weights = torch.Tensor([0.3, 0.7]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
+    # class 0: is not foggy / class 1: is foggy
+    n_class_0, n_class_1 = dset_train.get_balancedness()
+    n_tot = n_class_0 + n_class_1
+    w0, w1 = n_class_1/n_tot, n_class_0/n_tot
     weights = torch.Tensor([w0, w1]).to(device)
-
 
 #if os.path.exists(PATH_MODEL) == True:
 #    print('trained model already exists, loading model...')
 #    model = torch.load(PATH_MODEL)
 #else:
-
-# dict(model.named_modules()) -> gets all layers with implementation (only names: dct.keys() )
+#    dict(model.named_modules()) -> gets all layers with implementation (only names: dct.keys() )
 
 
 
