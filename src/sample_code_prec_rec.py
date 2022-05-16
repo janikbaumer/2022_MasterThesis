@@ -13,7 +13,7 @@ y_true = np.asarray([0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1], dtype=np.int3
 y_pred = np.asarray([0.3, 0.2, 0.6, 0.9, 0.7, 0.1, 0.0, 0.9, 0.5, 0.6, 0.3, 0.2, 0.1, 0.9, 0.4], dtype=np.float32)
 
 # PR-Curve
-precs, recs, Threshs = precision_recall_curve(y_true,y_pred)
+precs, recs, Threshs = precision_recall_curve(y_true[::1000],y_pred[:1000])
 
 # calculate AUC score here!
 # P is the number of positives
