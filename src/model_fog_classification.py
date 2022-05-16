@@ -11,7 +11,6 @@ import numpy as np
 from time import time
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
 
-
 from torch.utils.data import DataLoader, random_split
 from torch import nn
 from torchvision import models
@@ -37,7 +36,7 @@ print('imports done')
 # TODO (after meeting):
     # check data augmentation (horizontal flipping, cropping to eg 80-90%)), ev more
         # issue found: mean of image net could not be used for our data (mean was not 0 after tf)
-        # TODO easier solution: make sure imgs are in range (0,1) not (0.255) -> check mean and std
+        # TODO easier solution: make sure imgs are in range (0,1) not (0,255) -> check mean and std
         # assumption: learned features from resnet can also be used for our imgaes (same pixel distribution)
         # (might be slightly wrong, as I am using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
 
@@ -97,10 +96,6 @@ def print_grid(x, y, batchsize, batch_iteration):
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
-
-    """
-    batch_iteration = 0
-    """
     
     batch_iteration = {}
     batch_iteration['train'] = 0
@@ -108,8 +103,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     
     for epoch in range(num_epochs):
         print('\n', '-' * 10)
-        
-
 
         for phase in ['train', 'val']:  # in each epoch, do training and validation
             print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
@@ -132,7 +125,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 """
 
             running_loss = 0  # loss (to be updated during batch iteration)
-            batch_it_loss, epoch_loss = 0, 0
+            batch_it_loss = 0
 
             """
             y_true_batch_it, y_pred_batch_it, y_probab_batch_it = [], [], []
@@ -267,33 +260,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     scheduler.step()
                     # scheduler.print_lr()
 
-
-            epoch_loss = running_loss / len(dset)
-            print(f'epoch loss in {phase} phase: {epoch_loss}')
-
-            """
-            # epoch_loss = running_loss/len_dset_current
-            epoch_loss = running_loss/(len(dloader_train) + len(dloader_val))
-            print('epoch loss = ', epoch_loss)
-            """
-
-            """
-            #acc, prec_isFoggyIsTrue, rec_isFoggyIsTrue, f1_isFoggyIsTrue = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=1)
-            # TODO: do every 200th batch iteration or so
-            #wandb.log({
-            #    f'{phase} loss' : epoch_loss,
-            #    f'{phase} accuracy' : acc,
-            #    f'{phase} precision (isFoggy is True)' : prec_isFoggyIsTrue,
-            #    f'{phase} recall (isFoggy is True)' : rec_isFoggyIsTrue,  # this should be high !!! (to catch all (foggy) images)
-            #    f'{phase} F1-score (isFoggy is True)' : f1_isFoggyIsTrue,
-            #    'n_epoch' : epoch})
-            # log n_epoch and n_batch_iteration
-            acc, prec_isFoggyIsFalse, rec_isFoggyIsFalse, f1_isFoggyIsFalse = get_and_print_stats(confmat=cm_tot, mode=phase, label_isFoggy=0)
-            wandb.log({f'{phase} precision (isFoggy is False)' : prec_isFoggyIsFalse})
-            wandb.log({f'{phase} recall (isFoggy is False)' : rec_isFoggyIsFalse})
-            wandb.log({f'{phase} F1-score (isFoggy is False)' : f1_isFoggyIsFalse})
-            """
-
         print()
 
     time_end = time()
@@ -334,7 +300,7 @@ parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and i
 args = parser.parse_args()
 
 # logging
-wandb.init(project="isFoggy_pretrained_finetuning", entity="jbaumer", config=args)
+wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 
 # set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -359,19 +325,27 @@ PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epoc
 
 # create datasets and dataloaders
 ###dset(_full) = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST)
-dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
+#dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+#dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 
 # dset_train, dset_val = get_train_val_split(dset)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
 
-len_dset_train, len_dset_val = len(dset_train), len(dset_val)
+# TODO: use only handlabeled data for dset full
+    # sep. into train and val
+    # use 1 camstat for now
+    # (BB1)
 
-"""
-# to try with only handlabeled data
-dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-dset_train, dset_val = get_train_val_split(dset_full)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
-"""
+    # to try with only handlabeled data
+    # dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+    # dset_train, dset_val = get_train_val_split(dset_full)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
+
+# dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+# dset_train, dset_val = get_train_val_split(dset_full)
+
+dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+
+print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
@@ -434,13 +408,6 @@ if LR_SCHEDULER != 'None':
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
-
-"""
-# train all layers (should already be default)
-for param in model.parameters():
-    param.requires_grad = True  # if False, do not apply backprop on weight that were used for feature extraction -> fixed feature extractor
-    param = param.to(device)  # prob not needed (whole model set to device later)
-"""
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
 
