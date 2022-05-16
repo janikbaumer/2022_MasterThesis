@@ -34,7 +34,7 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ['PYTHONHASHSEED'] = str(random_seed)
 
-def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand, y_rand):
+def get_label_patch_and_tf(lbl_path, patchsize, x_rand, y_rand):
     x_patch = patchsize[0]
     y_patch = patchsize[1]
 
@@ -47,7 +47,7 @@ def get_label_patch_and_shape_and_tf(lbl_path, patchsize, x_rand, y_rand):
     arr[arr==255] = 2
     arr[arr==3] = 2
 
-    return arr, full_shape, x_shift, y_shift
+    return arr, x_shift, y_shift
 
 def get_image_patch(img_path, x_shift, y_shift, patchsize, x_rand=600, y_rand=400):
     x_patch = patchsize[0]
@@ -183,17 +183,12 @@ class DischmaSet_segmentation():
         img_path = self.compositeimage_path_list[idx]
         label_path = self.label_path_list[idx]
 
-
-        # TODO:
-        # normalize image
-        # data augmentation 
-
         label_shape = rasterio.open(label_path).shape
         xrand = random.randint(0, label_shape[1] - self.patch_size[1])
         yrand = random.randint(0, label_shape[0] - self.patch_size[0])
 
         # get image and label patches
-        lbl_patch, lbl_shape_full, xshift, yshift = get_label_patch_and_shape_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
+        lbl_patch, xshift, yshift = get_label_patch_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
 
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
@@ -206,7 +201,7 @@ class DischmaSet_segmentation():
 
         '''
         plt.figure()
-        f, axarr = plt.subplots(2, 1) #subplot(r,c) provide the no. of rows and columns
+        f, axarr = plt.subplots(2, 1) #subplots(r,c) provide the no. of rows and columns
         axarr[0].set_title(f'Image Patch {self.patch_size}')
         axarr[0].imshow(np.transpose(img_patch, (1,2,0)))
         axarr[1].set_title(f'Label Patch {self.patch_size}')
