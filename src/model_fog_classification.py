@@ -125,7 +125,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 dloader = dloader_val
 
             running_loss = 0  # loss (to be updated during batch iteration)
-            batch_it_loss = 0
 
             y_true_total = []
             y_pred_probab_total = []
@@ -196,7 +195,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                         running_loss = 0
 
-
                 if phase == 'val':
                     if batch_iteration[phase]%len(dloader) == 0:
                         loss = running_loss/len(dloader)
@@ -204,7 +202,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                         get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
-            
+
             if phase == 'train':  # at end of epoch (training, could also be end of validation)
                 if scheduler is not None:
                     scheduler.step()
@@ -231,6 +229,7 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ['PYTHONHASHSEED'] = str(random_seed)
 
+
 ############ ARGPARSERS ############
 
 parser = argparse.ArgumentParser(description='Run pretrained finetuning.')
@@ -245,13 +244,12 @@ parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and i
 
 args = parser.parse_args()
 
-# logging
 LOGGING = True
 if LOGGING:
     wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 
-# set device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # set device
+
 
 ############ GLOBAL VARIABLES ############
 
@@ -271,11 +269,11 @@ N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 LOG_EVERY = 200
 
-########################### create datasets and dataloaders ###########################
+############ DATASETS AND DATALOADERS ############    # TODO beautify 
 
 # TODO: use only handlabeled data for dset full
     # sep. into train and val
-    # use 1 camstat for now (BB1)
+    # use 1 camstat for now (BB2)
 
 
 # dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
@@ -302,6 +300,10 @@ dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
 # n0, n1 = get_balance(dset_train)
 
+
+############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############  # TODO beautify 
+
+
 if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
@@ -318,8 +320,6 @@ elif WEIGHTED == 'Auto':
 #    model = torch.load(PATH_MODEL)
 #else:
 #    dict(model.named_modules()) -> gets all layers with implementation (only names: dct.keys() )
-
-
 
 ### RESNET -- should work
 model = models.resnet18(pretrained=True)
@@ -358,4 +358,3 @@ elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
-
