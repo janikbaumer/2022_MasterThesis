@@ -21,39 +21,23 @@ from dischma_set_classification import DischmaSet_classification
 
 print('imports done')
 
-# note: class 1 = foggy images
 
-# TODO:
-    # Log confusion matrix
-    # validation more often (e.g. every 200th loop) on whole dloader_val # see: (Pytorch Lightning limit_val_batches and val_check_interval behavior)
-    # if other models, use BS small enogh s.t. it works
-    # precision recall curve - if looks strange, ev used metrics needs to be changed (e.g. to optimal F1 score, as it's robust to shifted PR curves (if they are shifted to one side))
-
-# cuda problems model (batch size, ...?)
-# reset batch_iteration to 0 (every step in dloader)
-# validation results meaningful?
-
-
-# TODO (after meeting):
-    # check data augmentation (horizontal flipping, cropping to eg 80-90%)), ev more
-        # issue found: mean of image net could not be used for our data (mean was not 0 after tf)
-        # TODO easier solution: make sure imgs are in range (0,1) not (0,255) -> check mean and std
-        # assumption: learned features from resnet can also be used for our images (same pixel distribution)
-        # (might be slightly wrong, as I am using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
-
-        # solution: calculate mean every time and for each image to be computed ->
-        #   newtf = transforms.Normalize((image.mean((1,2))), (0.229, 0.224, 0.225)) TODO: same thing for std
-        #   newimg = newtf(oldimg)
-        #  check: newimg.mean() should be ~0 
-    # also do data augmentation on validation set (then take average, or consider as foggy if at least once foggy)
+# NOTES:
+    # class 1 = foggy images
+    # if using other models, use BS small enogh s.t. it works
+    # assumption: learned features from resnet can also be used for our images (same pixel distribution)
+    # (might be slightly wrong, as we are using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
     # only take one model that works, do not play around too much
-    # check variable batch iteration (check how often model will be evaluated)
     # validate/train model - evaluate with only handlabelled data
-    # add confusion matrix to wandb.log
-    # add precision recall curve to wandb.log
-    # train and validate (with handlabelled data) - get metrics (wandb)
-    # train and validate (with handlabelled data, multiple cams) - get metrics (wandb)
-    # send selection of downsampled data / adapted script handlabelling.py to ehafner (to manually label data)
+
+# notes (after meeting):
+    # TODO: precision recall curve - if looks strange, ev used metrics needs to be changed (e.g. to optimal F1 score, as it's robust to shifted PR curves (if they are shifted to one side))
+    # TODO: check data augmentation manually (horizontal flipping, cropping to eg 80-90%)), ev more
+    # TODO: ev also do data augmentation on validation set (then take average, or consider as foggy if at least once foggy)
+    # TODO: add precision recall curve to wandb.log
+    # TODO: train and validate (with handlabelled data) - get metrics (wandb)
+    # TODO: train and validate (with handlabelled data, multiple cams) - get metrics (wandb)
+
 
 ################# FUNCTIONS ######################
 
@@ -93,6 +77,7 @@ def get_train_val_split(dset_full):
     dset_train, dset_val = random_split(dset_full, [len_train, len_val])  # Split Pytorch tensor
     return dset_train, dset_val
 
+
 def print_grid(x, y, batchsize, bi):
     x = x.cpu()
     y = y.cpu()
@@ -102,6 +87,7 @@ def print_grid(x, y, batchsize, bi):
     plt.title(f'batch iteration: {bi}\n{y_reshaped[0]}\n{y_reshaped[1]}')
     plt.imshow(grid_img.permute(1, 2, 0))
     plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{bi}')
+
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
@@ -154,7 +140,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 with torch.set_grad_enabled(phase == 'train'):
                     pred = model(x)  # probabilities (for class 0 and 1) / shape: batchsize, nclasses (8,2)
                     y_probab = pred[:,1]   # probability for class one / shape: batchsize (8) / vals in range (0,1)
-                    pred_binary = pred.argmax(dim=1)   # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true) # TODO: maybe use different thresholds
+                    pred_binary = pred.argmax(dim=1)   # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true)
                     loss = criterion(pred, y)
 
                     if phase == 'train':

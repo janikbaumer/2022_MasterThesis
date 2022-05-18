@@ -31,6 +31,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
 def print_grid(x, y, batchsize, batch_iteration):
+    # TODO: enhance function
     x = x.cpu()
     y = y.cpu()
     grid_img_x = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
@@ -44,7 +45,7 @@ def print_grid(x, y, batchsize, batch_iteration):
     plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{batch_iteration}')
 
 def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
-    
+
     acc = accuracy_score(yt.cpu(), ypred.cpu())
     prec = precision_score(yt.cpu(), ypred.cpu())
     rec = recall_score(yt.cpu(), ypred.cpu())
@@ -99,7 +100,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 batch_iteration[phase] += 1
 
                 """
-                # TODO: ev delete, resp enhance function
+                # TODO: ev delete
                 # plot some batches  # print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
                 #if batch_iteration[phase] < 200 and batch_iteration[phase]%10 == 0:
                 #    print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
@@ -107,8 +108,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 #    print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
                 """
 
-                # "If your targets contain the class indices already, you should remove the channel dimension":
-                # https://discuss.pytorch.org/t/only-batches-of-spatial-targets-supported-non-empty-3d-tensors-but-got-targets-of-size-1-1-256-256/49134
+                # target only have one channels (containing the class indices) -> must be removed for loss function (if BCE loss)
+                # # https://discuss.pytorch.org/t/only-batches-of-spatial-targets-supported-non-empty-3d-tensors-but-got-targets-of-size-1-1-256-256/49134
                 y = y.squeeze()
 
                 optimizer.zero_grad()
@@ -251,7 +252,7 @@ dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 # class 1: snow
 # class 2/3: no data
 
-# TODO get balancedness of dset / ev consider weighting of classes
+# TODO get balancedness of dset / ev consider weighting of classes (only of training data !)
 
 
 ############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############
@@ -273,7 +274,6 @@ out = model(x_try)
 """
 
 # loss functions to try: BCE / IoU-loss / focal loss
-# TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
 criterion = nn.CrossEntropyLoss(weight=torch.Tensor([1, 1, 0]).to(device), reduction='mean')
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)  # TODO ev add momentum
 

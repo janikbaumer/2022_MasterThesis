@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 import torch
-import torchvision
 import numpy as np
 import rasterio
 import rasterio
@@ -9,7 +8,6 @@ import random
 import warnings
 import rasterio
 
-from torchvision.transforms import functional as F
 from torchvision import transforms
 from matplotlib import pyplot as plt
 from rasterio.plot import show
@@ -19,6 +17,7 @@ from PIL import Image
 from time import time
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
+
 
 ############ REPRODUCIBILITY ############
 
@@ -34,20 +33,23 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ['PYTHONHASHSEED'] = str(random_seed)
 
+
+############ FUNCTIONS ############
+
 def get_label_patch_and_tf(lbl_path, patchsize, x_rand, y_rand):
     x_patch = patchsize[0]
     y_patch = patchsize[1]
 
     with rasterio.open(lbl_path) as src:
-        full_shape = src.shape
         arr = src.read(window=Window(x_rand, y_rand, x_patch, y_patch))
         x_topleft, y_topleft = src.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
         x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
-    arr[arr==85] = 1
-    arr[arr==255] = 2
+    arr[arr==85] = 1  # needed?
+    arr[arr==255] = 2  # needed?
     arr[arr==3] = 2
 
     return arr, x_shift, y_shift
+
 
 def get_image_patch(img_path, x_shift, y_shift, patchsize, x_rand=600, y_rand=400):
     x_patch = patchsize[0]
@@ -57,6 +59,7 @@ def get_image_patch(img_path, x_shift, y_shift, patchsize, x_rand=600, y_rand=40
         arr = src.read(window=Window(col_off=x_rand+x_shift, row_off=y_rand+y_shift, width=x_patch, height=y_patch))
 
     return arr
+
 
 def ensure_same_days(imgs_paths, labels_paths):
     """
@@ -81,7 +84,6 @@ def ensure_same_days(imgs_paths, labels_paths):
         label_path_wo_file, label_file = os.path.split(label_path)
         _, label_camstat = os.path.split(label_path_wo_file)  # camstat: 'CamX_STATION'
         label_camstat = label_camstat[14:]
-
         label_station = label_camstat.split('_')[0]
         label_cam = label_camstat.split('_')[1][-1]
         label_day = label_file[6:14]
@@ -99,6 +101,7 @@ def ensure_same_days(imgs_paths, labels_paths):
 
     return imgs_path_new, labels_path_new
 
+
 """
 nbr = 0
 p = f'correctly_placed_labels/number_{nbr}.png'
@@ -111,28 +114,26 @@ plt.imsave(fname=p, arr=label_full)
 
 class DischmaSet_segmentation():
 
-    def __init__(self, root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_1', 'Buelenberg_2'], mode='train') -> None:
+    def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1', 'Buelenberg_2'], mode='train') -> None:
         """
-        some definitions of variables (inputs)
         get lists with filenames from corresponding input cams
         two lists:
             - one contains filepaths with composite images
-            - the other contains filepaths with labels from tif files
-
-        TODO: define data augmentation pipeline
+            - the other contains filepaths with labels from tif files (final_workdir_...)
         """
+
         self.root = root
         self.stat_cam_lst = stat_cam_lst
         self.mode = mode
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to read everytime
+        self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
         self.patch_size = (256, 256)
-        if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both are divisible by 32 !!!
+        if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
 
-        ### get lists with paths from composite images and corrsponding labels
+        # get lists with paths from composite images and corrsponding labels
         self.compositeimage_path_list = []
         self.label_path_list = []
         for camstation in stat_cam_lst:
@@ -150,12 +151,6 @@ class DischmaSet_segmentation():
                 self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
 
-
-        #with open('label_path_list.txt', 'w') as f:
-        #    for item in self.label_path_list:
-        #        f.write("%s\n" % item)
-
-
         # data augmentation
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
             # transforms.RandomCrop(size=(int(0.8*self.patch_size[0]), int(0.8*self.patch_size[1]))),  # already cropped when choosing patches
@@ -163,10 +158,9 @@ class DischmaSet_segmentation():
             transforms.GaussianBlur(kernel_size=5),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2)  # might make sense (trees etc can change colors over seasons)
-            ]), p=0.5)
+            ]), p=0.5)  # TODO: check whether augmentations are actually applied (for this, ev set p=1, make sure to change back after checking)
         
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-
 
 
     def __len__(self):
@@ -174,6 +168,7 @@ class DischmaSet_segmentation():
         returns the number of VALID samples in dataset
         """
         return len(self.label_path_list)
+
 
     def __getitem__(self, idx):
         """
@@ -193,13 +188,14 @@ class DischmaSet_segmentation():
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
 
-        img = torch.as_tensor(img_patch).to(self.device)
+        img = torch.Tensor(img_patch).to(self.device)  # if errors, change to torch.as_tensor()
         lbl = torch.Tensor(lbl_patch).to(self.device)
 
         img = self.train_augmentation(img)
         img = self.normalize(img)
 
         '''
+        # plot images and labels
         plt.figure()
         f, axarr = plt.subplots(2, 1) #subplots(r,c) provide the no. of rows and columns
         axarr[0].set_title(f'Image Patch {self.patch_size}')
@@ -213,59 +209,16 @@ class DischmaSet_segmentation():
         axarr[0].imshow(np.transpose(i, (1,2,0)))
         axarr[1].set_title(f'Full Label {lbl_shape_full}')
         axarr[1].imshow(np.transpose(l, (1,2,0)))
-        print()
         '''
-        #print(label_path)
-        #print(label_shape, self.patch_size)
+
         return img.float(), lbl.long()
 
 
 if __name__=='__main__':
-    # testing functionalities
 
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all, mode='val')
-    
     for n in range(30, 100):
         img, lbl = x.__getitem__(n)
-
-    """
-    # to overlay images
-    # convert to PIL Images
-    i = Image.fromarray(np.transpose(np.uint8(img*255), (1,2,0)))
-    l = Image.fromarray(np.uint8(np.squeeze(lbl, axis=0)))
-    # https://de.acervolima.com/uberlagern-sie-ein-bild-mit-einem-anderen-bild-in-python/
-    i.paste(l, (0,0), mask=l)
-    # i.show()
-    """
-
-    """
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[0:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[1:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[2:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[3:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[4:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[5:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[6:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[7:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[8:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[9:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[10:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[11:], mode='val')
-    img, lbl = x.__getitem__(10)
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all[12:], mode='val')
-    img, lbl = x.__getitem__(10)
-    """

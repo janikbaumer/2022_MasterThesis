@@ -140,9 +140,6 @@ def downsample_final_workdirs():
     !!! can be run multiple times, duplicates will be overridden (for efficiency reason)!
     """
 
-
-    # TODO: make sure there are no multi channel tif images (else convert them first to single channel, or remove (if only few))
-
     # PATH_COMPLETE = '../datasets/dataset_devel'
     PATH_COMPLETE = '../datasets/dataset_complete'
 
@@ -151,7 +148,7 @@ def downsample_final_workdirs():
 
     n_fail = 0
 
-    for final_workdir_station_CamX in os.listdir(f'{PATH_COMPLETE}'):  # TODO: snowmap all
+    for final_workdir_station_CamX in os.listdir(f'{PATH_COMPLETE}'):
         if final_workdir_station_CamX.startswith('final_workdir_Fog_threshold'):  # to not consider Composites and DischmaCams folder
             print(f'start downsampling with images from {final_workdir_station_CamX}')
 
