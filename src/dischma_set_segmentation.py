@@ -101,6 +101,17 @@ def ensure_same_days(imgs_paths, labels_paths):
 
     return imgs_path_new, labels_path_new
 
+def data_augmentation(tensor_img_lbl, augm_pipeline, norm, coljit):
+    imglbl = augm_pipeline(tensor_img_lbl)  # together to have same random seed
+    img = imglbl[0:3, ...]
+    img = norm(img)
+    img = coljit(img)
+
+    lbl = imglbl[-1, ...].unsqueeze(0)
+    # lbl = norm(lbl)
+    # lbl = coljit(lbl)  #
+
+    return img.float(), lbl.long()  #augmented_imglbl
 
 """
 nbr = 0
@@ -128,7 +139,7 @@ class DischmaSet_segmentation():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
-        self.patch_size = (256, 256)
+        self.patch_size = (256*8, 256*8)
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
@@ -152,15 +163,18 @@ class DischmaSet_segmentation():
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
 
         # data augmentation
+        self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
+            ###self.normalize,
             # transforms.RandomCrop(size=(int(0.8*self.patch_size[0]), int(0.8*self.patch_size[1]))),  # already cropped when choosing patches
             transforms.RandomHorizontalFlip(p=1),  # here p=1, as p=0.5 will be applied for whole RandomApply block
             transforms.GaussianBlur(kernel_size=5),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2)  # might make sense (trees etc can change colors over seasons)
-            ]), p=0.5)  # TODO: check whether augmentations are actually applied (for this, ev set p=1, make sure to change back after checking)
+            ###transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
+            ]), p=0.5)
         
-        self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        self.coljit = transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)
 
 
     def __len__(self):
@@ -188,30 +202,34 @@ class DischmaSet_segmentation():
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
 
-        img = torch.Tensor(img_patch).to(self.device)  # if errors, change to torch.as_tensor()
-        lbl = torch.Tensor(lbl_patch).to(self.device)
+        i = torch.Tensor(img_patch).to(self.device)  # if errors, change to torch.as_tensor()
+        l = torch.Tensor(lbl_patch).to(self.device)
 
-        img = self.train_augmentation(img)
-        img = self.normalize(img)
+
+        # cat img and lbl tensors together, apply train augmentation, the split again to img, lbl
+        # note:
+        #   ColorJitter and Normalization only for img
+        #   RandomHorizontalFlip and GaussianBlur applied on img and label with given probability
+        imglbl = torch.cat((i, l), dim=0)  # torch.Size([4, 2048, 2048])
+        i, l = data_augmentation(imglbl, self.train_augmentation, self.normalize, self.coljit)
+
+        """
+        # test plots:
+        plt.imshow(np.transpose(img.cpu().numpy(), (1,2,0)))
+        plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)))
+        """
 
         '''
         # plot images and labels
         plt.figure()
         f, axarr = plt.subplots(2, 1) #subplots(r,c) provide the no. of rows and columns
         axarr[0].set_title(f'Image Patch {self.patch_size}')
-        axarr[0].imshow(np.transpose(img_patch, (1,2,0)))
+        axarr[0].imshow(np.transpose(i.cpu().numpy(), (1,2,0)))
         axarr[1].set_title(f'Label Patch {self.patch_size}')
-        axarr[1].imshow(np.transpose(lbl_patch, (1,2,0)))
-
-        plt.figure()
-        f, axarr = plt.subplots(2, 1) #subplot(r,c) provide the no. of rows and columns
-        axarr[0].set_title(f'Full Image {self.original_shape}')
-        axarr[0].imshow(np.transpose(i, (1,2,0)))
-        axarr[1].set_title(f'Full Label {lbl_shape_full}')
-        axarr[1].imshow(np.transpose(l, (1,2,0)))
+        axarr[1].imshow(np.transpose(l.cpu().numpy(), (1,2,0)))
         '''
 
-        return img.float(), lbl.long()
+        return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1
 
 
 if __name__=='__main__':
@@ -219,6 +237,8 @@ if __name__=='__main__':
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all, mode='val')
-    for n in range(30, 100):
-        img, lbl = x.__getitem__(n)
+    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all)
+    #for n in range(30, 100):
+    #    img, lbl = x.__getitem__(n)
+    img, lbl = x.__getitem__(70)
+
