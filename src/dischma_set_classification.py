@@ -8,8 +8,6 @@ from torchvision import transforms
 import numpy as np
 from matplotlib import pyplot as plt
 
-# TODO: beautify whole code
-
 
 def get_indices_or_None(path, raw_img):
     """
@@ -88,21 +86,23 @@ class DischmaSet_classification():
         self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
-            transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.GaussianBlur(kernel_size=5),
-            # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2)  # might make sense (trees etc can change colors over seasons)
-        ]), p=1)  # TODO check if augmentation is actually applied, then reduce probability!
-
-        self.val_augmentation = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
         self.denormalize = transforms.Compose(
             [transforms.Normalize(mean= [0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
             transforms.Normalize(mean= [-0.485, -0.456, -0.406], std=[1., 1., 1.])]
         )
+
+        self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
+            self.normalize,
+            transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.GaussianBlur(kernel_size=5),
+            # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
+            transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
+        ]), p=0.5)
+
+        self.val_augmentation = self.normalize
 
         # already done in preprocessing - manually saved and working with those
         self.DOWNSCALE_FACTOR = 1  # 1 for no downsampling, else height and width is (each) downscaled by this factor
@@ -139,7 +139,7 @@ class DischmaSet_classification():
                         img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
                         self.is_foggy.append(int(img_is_foggy))
                         self.path_list_valid.append(full_path_img)
-                
+
                 if self.mode == 'train_manual' and raw_img_name[0:4] == self.YEAR_VAL and raw_img_name[4:6] not in self.MONTHS_VAL:
                     if os.path.isfile(self.full_path_manual_labels):
                         img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
@@ -184,34 +184,24 @@ class DischmaSet_classification():
         self.path_img = self.path_list_valid[idx]
         image = torchvision.io.read_image(path=self.path_img)
         if self.DOWNSCALE_FACTOR != 1:
-            shp = tuple(image.shape[-2:])  # (6000, 4000)
+            shp = tuple(image.shape[-2:])  # (600, 400)
             shp_new = tuple(int(x/self.DOWNSCALE_FACTOR) for x in shp)
             image = F.resize(img=image, size=shp_new)
         image = image/255  # convert to floats between 0 and 1  # normalization / standardization
-        
-        """
-        # prob. to delete
-        mean = image.mean((1,2))
-        std = image.std((1,2))
-        norm = torchvision.transforms.Normalize(mean, std)
-        image = norm(image)
-        """
-        
+
         # transformations
         tf1 = self.train_augmentation(image)
-        tf2 = self.normalize(tf1)
 
         """
-        prob. to delete - or check if it works
-        # show unnormalized image:
-        unnorm_img = self.inv_transform(norm_image)
-        plt.imshow(np.transpose(unnorm_img.numpy(), (1, 2, 0)))
+        # test plots:
+        plt.imshow(np.transpose(image.numpy(), (1,2,0)))
+        plt.imshow(np.transpose(self.denormalize(tf1).numpy(), (1,2,0))) # or without denormalize
         """
-        
+
         # get label (True if img is foggy, resp. img was not used for composite image generation)
         label = self.is_foggy[idx]
 
-        return tf2, label
+        return tf1, label
 
 
     def get_balancedness(self):
