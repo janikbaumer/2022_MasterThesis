@@ -31,18 +31,20 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
 def print_grid(x, y, batchsize, batch_iteration):
-    # TODO: enhance function
     x = x.cpu()
-    y = y.cpu()
+    y = y.cpu().float()
     grid_img_x = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
-    grid_img_y = torchvision.utils.make_grid(y.float(), nrow=int(batchsize/2), normalize=True)
+    grid_img_y = torchvision.utils.make_grid(y, nrow=int(batchsize/2), normalize=True)
+
     plt.figure()
+    plt.title(f'batch iteration: {batch_iteration}')
     f, axarr = plt.subplots(2,1)
     axarr[0].imshow(grid_img_x.permute(1,2,0))
+    axarr[0].set_title('Images')
     axarr[1].imshow(grid_img_y.permute(1,2,0))
-    # plt.show()
-    # plt.title(f'batch iteration: {batch_iteration}\n{y_reshaped[0]}\n{y_reshaped[1]}')
-    plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{batch_iteration}')
+    axarr[1].set_title('Labels')
+
+    plt.savefig(f'stats/fig_check_manually/grid_segmentation_batch_iteration_{batch_iteration}')
 
 def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
 
@@ -99,13 +101,11 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             for x, y in tqdm(dloader):
                 batch_iteration[phase] += 1
 
+                print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
+                
                 """
-                # TODO: ev delete
-                # plot some batches  # print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
-                #if batch_iteration[phase] < 200 and batch_iteration[phase]%10 == 0:
-                #    print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
-                #if batch_iteration[phase] == 0:
-                #    print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
+                if batch_iteration[phase] < 200 and batch_iteration[phase]%10 == 0:
+                    print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
                 """
 
                 # target only have one channels (containing the class indices) -> must be removed for loss function (if BCE loss)
@@ -230,17 +230,11 @@ PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNI
 LOG_EVERY = 50
 
 
-############ DATASETS AND DATALOADERS ############    # TODO beautify 
+############ DATASETS AND DATALOADERS ############
 
-# create datasets and dataloaders
-#dset_train = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-#dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-
-dset_full = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-
-# SPLIT TRAIN AND VALIDATION (80% VS 20%)
-dset_train, dset_val = random_split(dset_full, (int(len(dset_full)*0.8), math.ceil(len(dset_full)*0.2)))
-
+# create datasets and dataloaders, split in train and validation set
+dset_full = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode=None)
+dset_train, dset_val = random_split(dset_full, (int(len(dset_full)*TRAIN_SPLIT), math.ceil(len(dset_full)*(1-TRAIN_SPLIT))))
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 len_dset_train, len_dset_val = len(dset_train), len(dset_val)
@@ -248,9 +242,10 @@ len_dset_train, len_dset_val = len(dset_train), len(dset_val)
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
-# class 0: no snow
-# class 1: snow
-# class 2/3: no data
+# Note:
+#   class 0: no snow
+#   class 1: snow
+#   class 2/3: no data
 
 # TODO get balancedness of dset / ev consider weighting of classes (only of training data !)
 
@@ -275,7 +270,7 @@ out = model(x_try)
 
 # loss functions to try: BCE / IoU-loss / focal loss
 criterion = nn.CrossEntropyLoss(weight=torch.Tensor([1, 1, 0]).to(device), reduction='mean')
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)  # TODO ev add momentum
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
 
 if LR_SCHEDULER != 'None':
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
