@@ -227,6 +227,7 @@ parser.add_argument('--stations_cam', help='list of stations with camera number,
 parser.add_argument('--weighted', help='how to weight the classes (manual: as given in script / Auto: Inversely proportional to occurance / False: not at all')
 parser.add_argument('--path_dset', help='path to used dataset ')
 parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and if so after how many epochs to reduced LR')
+parser.add_argument('--model', help='choose model type')
 
 args = parser.parse_args()
 
@@ -246,6 +247,7 @@ TRAIN_SPLIT = args.train_split
 WEIGHTED = args.weighted
 PATH_DATASET = args.path_dset
 LR_SCHEDULER = args.lr_scheduler
+MODEL_TYPE = args.model
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
@@ -254,8 +256,9 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 LOG_EVERY = 200
+LOAD_MODEL = True
 
-############ DATASETS AND DATALOADERS ############    # TODO beautify - together with change modes in DischmaSetClassification file
+############ DATASETS AND DATALOADERS ############
 
 # new approach: use only handlabeled data for dset full, then sep. into train and val
 dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='full_v2')
@@ -270,6 +273,10 @@ print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.'
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
+# Note:
+#   class 0: not foggy
+#   class 1: foggy
+
 
 ############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############  # TODO beautify 
 
@@ -278,47 +285,49 @@ if WEIGHTED == 'False':
 elif WEIGHTED == 'Manual':
     weights = torch.Tensor([0.3, 0.7]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
-    # class 0: is not foggy / class 1: is foggy
     n_class_0, n_class_1 = dset_full.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
     w0, w1 = n_class_1/n_tot, n_class_0/n_tot
     weights = torch.Tensor([w0, w1]).to(device)
 
-#if os.path.exists(PATH_MODEL) == True:
-#    print('trained model already exists, loading model...')
-#    model = torch.load(PATH_MODEL)
-#else:
-#    dict(model.named_modules()) -> gets all layers with implementation (only names: dct.keys() )
+if MODEL_TYPE == 'resnet':
+    # should work
+    model = models.resnet18(pretrained=True)
+    n_features = model.fc.in_features  # adapt fully connected layer
+    model.fc = nn.Linear(n_features, N_CLASSES)  # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
-### RESNET -- should work
-model = models.resnet18(pretrained=True)
-n_features = model.fc.in_features  # adapt fully connected layer
-model.fc = nn.Linear(n_features, N_CLASSES)  # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
+elif MODEL_TYPE == 'efficientnet':
+    # too much memory used
+    model = models.efficientnet_b1(pretrained=True)
+    n_features = model.classifier[1].in_features  # adapt fully connected layer
+    model.classifier[1] = nn.Linear(n_features, N_CLASSES)
 
-# ### EFFICIENT NET -- too much memory used
-# model = models.efficientnet_b1(pretrained=True)
-# n_features = model.classifier[1].in_features  # adapt fully connected layer
-# model.classifier[1] = nn.Linear(n_features, N_CLASSES)
-# 
-# ### DENSE NET -- too much memory used
-# model = models.densenet121()
-# n_features = model.classifier.in_features
-# model.classifier = nn.Linear(n_features, N_CLASSES)
-# 
-# VGG 11 -- should work
+elif MODEL_TYPE == 'densenet':
+    # too much memory used
+    model = models.densenet121()
+    n_features = model.classifier.in_features
+    model.classifier = nn.Linear(n_features, N_CLASSES)
 
-# model = models.vgg11()
-# f_in = model.classifier[6].out_features
-# model.classifier.add_module('new_relu', torch.nn.modules.activation.ReLU(inplace=True))  # add to append to last sequential block (of the classifier)
-# model.classifier.add_module('new_dropout', torch.nn.modules.dropout.Dropout(p=0.5, inplace=False))
-# model.classifier.add_module('new_linear', torch.nn.modules.Linear(in_features=f_in, out_features=N_CLASSES))
+elif MODEL_TYPE == 'vgg11':
+    # should work
+    model = models.vgg11()
+    f_in = model.classifier[6].out_features
+    model.classifier.add_module('new_relu', torch.nn.modules.activation.ReLU(inplace=True))  # add to append to last sequential block (of the classifier)
+    model.classifier.add_module('new_dropout', torch.nn.modules.dropout.Dropout(p=0.5, inplace=False))
+    model.classifier.add_module('new_linear', torch.nn.modules.Linear(in_features=f_in, out_features=N_CLASSES))
 
-# model = models.GoogLeNet(num_classes=N_CLASSES)
+elif MODEL_TYPE == 'googlenet':
+    model = models.GoogLeNet(num_classes=N_CLASSES)
+
+if LOAD_MODEL:
+    if os.path.exists(PATH_MODEL) == True:
+        print('trained model already exists, loading model...')
+        model = torch.load(PATH_MODEL)
 
 model = model.to(device)
 
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
-criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)  # TODO: currently, all occurances are considered, optimal would be to only consider occ. of train split
+criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)  # TODO ev add momentum
 
 if LR_SCHEDULER != 'None':
@@ -327,3 +336,4 @@ elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
+
