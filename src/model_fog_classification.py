@@ -278,7 +278,7 @@ dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 #   class 1: foggy
 
 
-############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############  # TODO beautify 
+############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############
 
 if WEIGHTED == 'False':
     weights = None
@@ -328,7 +328,7 @@ model = model.to(device)
 
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)  # TODO ev add momentum
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
 
 if LR_SCHEDULER != 'None':
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
