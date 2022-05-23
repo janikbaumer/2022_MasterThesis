@@ -84,6 +84,8 @@ class DischmaSet_classification():
         self.YEAR_TRAIN = '2020'
         self.YEAR_VAL = '2021'
         self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
+        self.YEAR_MANUAL = '2021'
+        self.MONTHS_MANUAL = ['01', '04', '07', '10']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
@@ -125,12 +127,12 @@ class DischmaSet_classification():
 
             # for each jpg/png file, get indices, compare to camera thresholds
             # and check whether img was used for composite image generation (if yes: not foggy (class 0) / if no: foggy (class 1))
+            # or get label from manual classification
             # create a label list of booleans (ordered the same as list with file names)
 
             for raw_img_name in self.file_list_camstat_years:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
                 full_path_img = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
 
-                # TODO important !!!: create two new modes for getting data from only handlabelled images!
                 if self.mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:  # use labels from txt files from PCA
                     A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
                     if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
@@ -157,15 +159,12 @@ class DischmaSet_classification():
                         print('manual labels do not exist, make sure to label them first (create file manual_labels_isfoggy.txt (with script handlabelling.py!')
                         break
 
-                """
-                # ev usable for task above : adapt variable img_is_foggy with data from respective file 'manual_labels_isfoggy.txt'
-                if mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:
-                    self.is_foggy.append(int(img_is_foggy))
-                    self.path_list_valid.append(full_path_img)
-                elif mode == 'val' and raw_img_name[0:4] == self.YEAR_VAL and raw_img_name[4:6] in self.MONTHS_VAL:
-                    self.is_foggy.append(int(img_is_foggy))
-                    self.path_list_valid.append(full_path_img)
-                """
+                if self.mode == 'full_v2' and raw_img_name[0:4] == self.YEAR_MANUAL and raw_img_name[4:6] in self.MONTHS_MANUAL:
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
 
 
     def __len__(self):

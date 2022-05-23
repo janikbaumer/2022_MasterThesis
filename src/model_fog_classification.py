@@ -30,13 +30,13 @@ print('imports done')
     # only take one model that works, do not play around too much
     # validate/train model - evaluate with only handlabelled data
 
-# notes (after meeting):
-    # TODO: precision recall curve - if looks strange, ev used metrics needs to be changed (e.g. to optimal F1 score, as it's robust to shifted PR curves (if they are shifted to one side))
-    # TODO: check data augmentation manually (horizontal flipping, cropping to eg 80-90%)), ev more
-    # TODO: ev also do data augmentation on validation set (then take average, or consider as foggy if at least once foggy)
-    # TODO: add precision recall curve to wandb.log
-    # TODO: train and validate (with handlabelled data) - get metrics (wandb)
-    # TODO: train and validate (with handlabelled data, multiple cams) - get metrics (wandb)
+# multiple TODO s: notes (after meeting):
+    # precision recall curve - if looks strange, ev used metrics needs to be changed (e.g. to optimal F1 score, as it's robust to shifted PR curves (if they are shifted to one side))
+    # check data augmentation manually (horizontal flipping, cropping to eg 80-90%)), ev more
+    # ev also do data augmentation on validation set (then take average, or consider as foggy if at least once foggy)
+    # add precision recall curve to wandb.log
+    # train and validate (with handlabelled data) - get metrics (wandb)
+    # train and validate (with handlabelled data, multiple cams) - get metrics (wandb)
 
 
 ################# FUNCTIONS ######################
@@ -230,7 +230,7 @@ parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and i
 
 args = parser.parse_args()
 
-LOGGING = True
+LOGGING = False
 if LOGGING:
     wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 
@@ -255,40 +255,23 @@ N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 LOG_EVERY = 200
 
-############ DATASETS AND DATALOADERS ############    # TODO beautify 
+############ DATASETS AND DATALOADERS ############    # TODO beautify - together with change modes in DischmaSetClassification file
 
-# TODO: use only handlabeled data for dset full
-    # sep. into train and val
-    # use 1 camstat for now (BB2)
-
-
-# dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-# dset_train, dset_val = get_train_val_split(dset_full)
-
-# dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-# dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-# dset_train, dset_val = get_train_val_split(dset)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
-
-"""
-# to try with only handlabeled data
-dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-dset_train, dset_val = get_train_val_split(dset_full)  # get e.g. 1 year of train data (eg 2020) and 4 mths of val data (e.g. 2021 Jan/April/July/Oct) - this val set must be handlabeled
-"""
-#dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-#dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+# new approach: use only handlabeled data for dset full, then sep. into train and val
+dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='full_v2')
 dset_train, dset_val = get_train_val_split(dset_full)
-
+"""
+# alternative, in case train and val sets should be got from different sources (manual labels vs labels from txt files - and different dates)
+dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+"""
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
-# n0, n1 = get_balance(dset_train)
-
 
 ############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############  # TODO beautify 
-
 
 if WEIGHTED == 'False':
     weights = None
@@ -296,7 +279,7 @@ elif WEIGHTED == 'Manual':
     weights = torch.Tensor([0.3, 0.7]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
     # class 0: is not foggy / class 1: is foggy
-    n_class_0, n_class_1 = dset_train.get_balancedness()
+    n_class_0, n_class_1 = dset_full.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
     w0, w1 = n_class_1/n_tot, n_class_0/n_tot
     weights = torch.Tensor([w0, w1]).to(device)
