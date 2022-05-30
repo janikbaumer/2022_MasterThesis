@@ -86,6 +86,12 @@ class DischmaSet_classification():
         self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
         self.YEAR_MANUAL = '2021'
         self.MONTHS_MANUAL = ['01', '04', '07', '10']
+
+        self.YEAR_TRAIN_VAL = 2021
+        self.MONTHS_TRAIN_VAL = ['01', '04', '07', '10']
+        self.YEAR_TEST = 2020
+        self.MONTHS_TEST = ['02', '05', '08', '11']
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
@@ -102,7 +108,7 @@ class DischmaSet_classification():
             transforms.GaussianBlur(kernel_size=5),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
             transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
-        ]), p=0.5)
+        ]), p=1)
 
         self.val_augmentation = self.normalize
 
@@ -110,8 +116,9 @@ class DischmaSet_classification():
         self.DOWNSCALE_FACTOR = 1  # 1 for no downsampling, else height and width is (each) downscaled by this factor
 
         # create list of file names (raw images) for all stations / cams
-        self.is_foggy = []
-        self.path_list_valid = []
+        self.is_foggy, self.is_foggy_test = []
+        self.path_list_valid, self.path_list_valid_test = []
+        
         for camstation in stat_cam_lst:
             STATION, CAM = camstation.split('_')
 
@@ -132,7 +139,8 @@ class DischmaSet_classification():
 
             for raw_img_name in self.file_list_camstat_years:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
                 full_path_img = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
-
+                
+                """
                 if self.mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:  # use labels from txt files from PCA
                     A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
                     if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
@@ -165,7 +173,24 @@ class DischmaSet_classification():
                         if img_is_foggy is not None:
                             self.is_foggy.append(int(img_is_foggy))
                             self.path_list_valid.append(full_path_img)
+                """
+                # lists for training or validation
+                if (self.mode == 'train' or self.mode == 'val') and raw_img_name[0:4] == self.YEAR_TRAIN_VAL and raw_img_name[4:6] in self.MONTHS_TRAIN_VAL:  # use manual labels
+                    # both training and validation  data is manually labelled from 2021 (Jan, April, July, Oct)
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
 
+                if self.mode == 'test' and raw_img_name[0:4] == self.YEAR_TEST and raw_img_name[4:6] in self.MONTHS_TEST:  # use manual labels
+                    # testing data is manually labelled from 2020 (Feb, May, Aug, Nov)
+                    # note: similar code as above, but appending to different lists
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy_test.append(int(img_is_foggy))
+                            self.path_list_valid_test.append(full_path_img)
 
     def __len__(self):
         """
@@ -180,7 +205,11 @@ class DischmaSet_classification():
         """
 
         # given idx, get image with filename belonging to this specific index (reading and downscaling)
-        self.path_img = self.path_list_valid[idx]
+        if self.mode == 'train' or self.mode == 'val':
+            self.path_img = self.path_list_valid[idx]
+        elif self.mode == 'test':
+            self.path_img = self.path_list_valid_test[idx]
+
         image = torchvision.io.read_image(path=self.path_img)
         if self.DOWNSCALE_FACTOR != 1:
             shp = tuple(image.shape[-2:])  # (600, 400)
@@ -189,7 +218,8 @@ class DischmaSet_classification():
         image = image/255  # convert to floats between 0 and 1  # normalization / standardization
 
         # transformations
-        tf1 = self.train_augmentation(image)
+        if self.mode == 'train':  # only do augmentation in training
+            tf1 = self.train_augmentation(image)
 
         """
         # test plots:
@@ -198,7 +228,10 @@ class DischmaSet_classification():
         """
 
         # get label (True if img is foggy, resp. img was not used for composite image generation)
-        label = self.is_foggy[idx]
+        if self.mode == 'train' or self.mode == 'val':
+            label = self.is_foggy[idx]
+        elif self.mode == 'test':
+            label = self.is_foggy_test[idx]
 
         return tf1, label
 
@@ -211,7 +244,7 @@ class DischmaSet_classification():
 
 
 if __name__=='__main__':
-    x = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Stillberg_2'], mode='val')
+    x = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
     nclear, nfog = x.get_balancedness()
     img, lbl = x.__getitem__(0)
     print('nfog, nclear: ', nfog, nclear) 
