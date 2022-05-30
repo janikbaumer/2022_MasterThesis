@@ -141,7 +141,7 @@ class DischmaSet_classification():
 
             for raw_img_name in self.file_list_camstat_years:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
                 full_path_img = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
-                print()
+
                 """
                 if self.mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:  # use labels from txt files from PCA
                     A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)

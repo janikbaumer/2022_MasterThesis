@@ -264,6 +264,7 @@ PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epoc
 LOG_EVERY = 200
 LOAD_MODEL = True
 
+
 ############ DATASETS AND DATALOADERS ############
 
 # new approach: use only handlabeled data for dset full, then sep. into train and val
@@ -293,8 +294,8 @@ if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
     weights = torch.Tensor([0.2, 0.8]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
-elif WEIGHTED == 'Auto':
-    n_class_0, n_class_1 = dset_full.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
+elif WEIGHTED == 'Auto':  # TODO: check if works (with new dataset class)
+    n_class_0, n_class_1 = dset_train.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
     w0, w1 = n_class_1/n_tot, n_class_0/n_tot
     weights = torch.Tensor([w0, w1]).to(device)
