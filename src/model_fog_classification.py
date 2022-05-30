@@ -267,13 +267,16 @@ LOAD_MODEL = True
 ############ DATASETS AND DATALOADERS ############
 
 # new approach: use only handlabeled data for dset full, then sep. into train and val
-dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='full_v2')
-dset_train, dset_val = get_train_val_split(dset_full)
+#dset_full = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='full_v2')
+#dset_train, dset_val = get_train_val_split(dset_full)
 """
 # alternative, in case train and val sets should be got from different sources (manual labels vs labels from txt files - and different dates)
 dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
 dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 """
+dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)

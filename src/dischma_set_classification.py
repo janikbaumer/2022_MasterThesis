@@ -7,7 +7,9 @@ from torchvision.transforms import functional as F
 from torchvision import transforms
 import numpy as np
 from matplotlib import pyplot as plt
+import random
 
+TRAIN_SPLIT = 0.8
 
 def get_indices_or_None(path, raw_img):
     """
@@ -87,9 +89,9 @@ class DischmaSet_classification():
         self.YEAR_MANUAL = '2021'
         self.MONTHS_MANUAL = ['01', '04', '07', '10']
 
-        self.YEAR_TRAIN_VAL = 2021
+        self.YEAR_TRAIN_VAL = '2021'
         self.MONTHS_TRAIN_VAL = ['01', '04', '07', '10']
-        self.YEAR_TEST = 2020
+        self.YEAR_TEST = '2020'
         self.MONTHS_TEST = ['02', '05', '08', '11']
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -116,8 +118,8 @@ class DischmaSet_classification():
         self.DOWNSCALE_FACTOR = 1  # 1 for no downsampling, else height and width is (each) downscaled by this factor
 
         # create list of file names (raw images) for all stations / cams
-        self.is_foggy, self.is_foggy_test = []
-        self.path_list_valid, self.path_list_valid_test = []
+        self.is_foggy = []
+        self.path_list_valid = []
         
         for camstation in stat_cam_lst:
             STATION, CAM = camstation.split('_')
@@ -139,7 +141,7 @@ class DischmaSet_classification():
 
             for raw_img_name in self.file_list_camstat_years:  # raw_img_name: e.g. '20211230160501.jpg' or with .png
                 full_path_img = os.path.join(self.PATH_RAW_IMAGE, raw_img_name)
-                
+                print()
                 """
                 if self.mode == 'train' and raw_img_name[0:4] == self.YEAR_TRAIN:  # use labels from txt files from PCA
                     A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
@@ -174,6 +176,7 @@ class DischmaSet_classification():
                             self.is_foggy.append(int(img_is_foggy))
                             self.path_list_valid.append(full_path_img)
                 """
+
                 # lists for training or validation
                 if (self.mode == 'train' or self.mode == 'val') and raw_img_name[0:4] == self.YEAR_TRAIN_VAL and raw_img_name[4:6] in self.MONTHS_TRAIN_VAL:  # use manual labels
                     # both training and validation  data is manually labelled from 2021 (Jan, April, July, Oct)
@@ -189,8 +192,23 @@ class DischmaSet_classification():
                     if os.path.isfile(self.full_path_manual_labels):
                         img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
                         if img_is_foggy is not None:
-                            self.is_foggy_test.append(int(img_is_foggy))
-                            self.path_list_valid_test.append(full_path_img)
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
+
+        # set random seed, make sure to take same indices as validation samples
+        # split into training and validation set
+        idx_list = [i for i, _ in enumerate(self.is_foggy)]  # get all indices from list
+        random.seed(42)
+        random.shuffle(idx_list)
+        len_train_list = int(TRAIN_SPLIT*len(self.is_foggy))
+        if self.mode == 'train':
+            # get first 80% of above list
+            self.is_foggy = self.is_foggy[:len_train_list]
+            self.path_list_valid = self.path_list_valid[:len_train_list]
+        elif self.mode == 'val':
+            # get residual 20% of above list
+            self.is_foggy = self.is_foggy[len_train_list:]
+            self.path_list_valid = self.path_list_valid[len_train_list:]
 
     def __len__(self):
         """
@@ -205,10 +223,8 @@ class DischmaSet_classification():
         """
 
         # given idx, get image with filename belonging to this specific index (reading and downscaling)
-        if self.mode == 'train' or self.mode == 'val':
-            self.path_img = self.path_list_valid[idx]
-        elif self.mode == 'test':
-            self.path_img = self.path_list_valid_test[idx]
+        self.path_img = self.path_list_valid[idx]
+
 
         image = torchvision.io.read_image(path=self.path_img)
         if self.DOWNSCALE_FACTOR != 1:
@@ -220,7 +236,8 @@ class DischmaSet_classification():
         # transformations
         if self.mode == 'train':  # only do augmentation in training
             tf1 = self.train_augmentation(image)
-
+        elif self.mode == 'val':
+            tf1 = image
         """
         # test plots:
         plt.imshow(np.transpose(image.numpy(), (1,2,0)))
@@ -228,10 +245,8 @@ class DischmaSet_classification():
         """
 
         # get label (True if img is foggy, resp. img was not used for composite image generation)
-        if self.mode == 'train' or self.mode == 'val':
-            label = self.is_foggy[idx]
-        elif self.mode == 'test':
-            label = self.is_foggy_test[idx]
+        label = self.is_foggy[idx]
+
 
         return tf1, label
 
@@ -244,7 +259,7 @@ class DischmaSet_classification():
 
 
 if __name__=='__main__':
-    x = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
+    x = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_2', 'Sattel_1'], mode='train') #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
     nclear, nfog = x.get_balancedness()
     img, lbl = x.__getitem__(0)
     print('nfog, nclear: ', nfog, nclear) 
