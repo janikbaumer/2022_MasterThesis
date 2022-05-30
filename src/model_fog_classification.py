@@ -100,6 +100,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
         print('\n', '-' * 10)
 
         for phase in ['train', 'val']:  # in each epoch, do training and validation
+            print()
             print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
 
             if phase == 'train':
@@ -118,7 +119,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
 
             for x, y in tqdm(dloader):
-
+                #for i in range(1000):
                 batch_iteration[phase] += 1
 
                 # move to GPU
@@ -152,6 +153,11 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 y_true = y.cpu().tolist()
                 y_pred_probab = y_probab.cpu().tolist()  # prob for class one
                 y_pred_binary = pred_binary.cpu().tolist()
+
+                # debug - problematic: y_pred_binary is full with 0 (1 never gets predicted)
+                #print(y_true)
+                #print(y_pred_binary)
+                #print()
 
                 y_true_total.extend(y_true)
                 y_pred_probab_total.extend(y_pred_probab)
@@ -231,7 +237,7 @@ parser.add_argument('--model', help='choose model type')
 
 args = parser.parse_args()
 
-LOGGING = False
+LOGGING = True
 if LOGGING:
     wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 
@@ -283,7 +289,7 @@ dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
-    weights = torch.Tensor([0.3, 0.7]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
+    weights = torch.Tensor([0.2, 0.8]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
     n_class_0, n_class_1 = dset_full.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
@@ -328,12 +334,11 @@ model = model.to(device)
 
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
-
+optimizer = torch.optim.SGD( model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
+print('criterion: ', criterion, 'optimizer: ', optimizer)
 if LR_SCHEDULER != 'None':
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
-
