@@ -47,7 +47,7 @@ def get_balance(dset):
         lst.append(dset[ele][1])
 
 
-def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
+def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
     
     acc = accuracy_score(y_true=yt, y_pred=ypred)
     prec = precision_score(y_true=yt, y_pred=ypred)
@@ -62,7 +62,7 @@ def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
             f'{ph}/recall' : rec,  # this should be high !!! (to catch all foggy images)
             f'{ph}/F1-score' : f1,
             f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
-            # f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
             'n_epoch' : ep,
             'batch_iteration' : bi})
         
@@ -183,7 +183,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over {LOG_EVERY} batch iterations): {loss}')
 
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
 
                         running_loss = 0
 
@@ -192,7 +192,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss = running_loss/len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
 
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
 
             if phase == 'train':  # at end of epoch (training, could also be end of validation)
@@ -338,11 +338,11 @@ model = model.to(device)
 
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)
-optimizer = torch.optim.SGD( model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
-print('criterion: ', criterion, 'optimizer: ', optimizer)
+optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
 if LR_SCHEDULER != 'None':
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.1)  # Decay LR by a factor of 0.1 every 'step_size' epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.5)  # Decay LR by a factor of gamma every 'step_size' epochs
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
+print('criterion: ', criterion, 'optimizer: ', optimizer, 'lr scheduler: ', exp_lr_scheduler)
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
