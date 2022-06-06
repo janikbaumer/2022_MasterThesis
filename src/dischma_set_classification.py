@@ -9,7 +9,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 import random
 
-TRAIN_SPLIT = 0.8
 
 def get_indices_or_None(path, raw_img):
     """
@@ -91,8 +90,11 @@ class DischmaSet_classification():
 
         self.YEAR_TRAIN_VAL = '2021'
         self.MONTHS_TRAIN_VAL = ['01', '04', '07', '10']
+        # self.DAYS_TRAIN = list(range(1, 24+1))  # days 1 to 24 for training, residual days for validation
+        self.DAYS_TRAIN = [str(ele).zfill(2) for ele in list(range(1, 24+1))]
         self.YEAR_TEST = '2020'
         self.MONTHS_TEST = ['02', '05', '08', '11']
+        self.DAYS_TEST = ['10', '25']
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -177,7 +179,36 @@ class DischmaSet_classification():
                             self.path_list_valid.append(full_path_img)
                 """
 
-                # lists for training or validation
+                if self.mode == 'train' and raw_img_name[0:4] in self.YEAR_TRAIN_VAL and raw_img_name[6:8] in self.DAYS_TRAIN:
+                    # training data is manually labelled from 2021 (from 1st to 29th)
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
+
+                if self.mode == 'val' and raw_img_name[0:4] in self.YEAR_TRAIN_VAL and raw_img_name[6:8] not in self.DAYS_TRAIN:
+                    # validation data is manually labelled from 2021 (from 25th to end (28th/30th/31st))
+                    # note: same code snippet as above - ev create function for this snippet
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
+
+                if self.mode == 'test' and raw_img_name[0:4] == self.YEAR_TEST and raw_img_name[6:8] in self.DAYS_TEST: # and raw_img_name[4:6] in self.MONTHS_TEST   # use manual labels
+                    # testing data is manually labelled from 2020 (each 10th and 25th from each month)
+                    # note: same code snippet as above - ev create function for this snippet
+                    if os.path.isfile(self.full_path_manual_labels):
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        if img_is_foggy is not None:
+                            self.is_foggy.append(int(img_is_foggy))
+                            self.path_list_valid.append(full_path_img)
+
+        """
+        # only needed if train/val data is randomly split into train/test split, above solution is done with weeks/days (train: weeks 1-3 (resp. days 1-24), val: 4 (resp. days 24-last))
+
+                # lists for training or validation, to be split afterwards
                 if (self.mode == 'train' or self.mode == 'val') and raw_img_name[0:4] == self.YEAR_TRAIN_VAL and raw_img_name[4:6] in self.MONTHS_TRAIN_VAL:  # use manual labels
                     # both training and validation  data is manually labelled from 2021 (Jan, April, July, Oct)
                     if os.path.isfile(self.full_path_manual_labels):
@@ -186,21 +217,12 @@ class DischmaSet_classification():
                             self.is_foggy.append(int(img_is_foggy))
                             self.path_list_valid.append(full_path_img)
 
-                if self.mode == 'test' and raw_img_name[0:4] == self.YEAR_TEST and raw_img_name[4:6] in self.MONTHS_TEST:  # use manual labels
-                    # testing data is manually labelled from 2020 (Feb, May, Aug, Nov)
-                    # note: similar code as above, but appending to different lists
-                    if os.path.isfile(self.full_path_manual_labels):
-                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
-                        if img_is_foggy is not None:
-                            self.is_foggy.append(int(img_is_foggy))
-                            self.path_list_valid.append(full_path_img)
-
-        # set random seed, make sure to take same indices as validation samples
         # split into training and validation set
+        # set random seed, make sure to take same indices as validation samples
         idx_list = [i for i, _ in enumerate(self.is_foggy)]  # get all indices from list
         random.seed(42)
         random.shuffle(idx_list)
-        len_train_list = int(TRAIN_SPLIT*len(self.is_foggy))
+        len_train_list = int(TRAIN_SPLIT*len(self.is_foggy))  # note: set train_split to some value (e.g. 0.8)
         if self.mode == 'train':
             # get first 80% of above list
             self.is_foggy = self.is_foggy[:len_train_list]
@@ -209,6 +231,7 @@ class DischmaSet_classification():
             # get residual 20% of above list
             self.is_foggy = self.is_foggy[len_train_list:]
             self.path_list_valid = self.path_list_valid[len_train_list:]
+        """
 
     def __len__(self):
         """
@@ -231,7 +254,7 @@ class DischmaSet_classification():
             shp = tuple(image.shape[-2:])  # (600, 400)
             shp_new = tuple(int(x/self.DOWNSCALE_FACTOR) for x in shp)
             image = F.resize(img=image, size=shp_new)
-        image = image/255  # convert to floats between 0 and 1  # normalization / standardization
+        image = image/255  # convert to floats between 0 and 1  (normalization / standardization)
 
         # transformations
         if self.mode == 'train':  # only do augmentation in training
@@ -262,5 +285,5 @@ if __name__=='__main__':
     x = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_2', 'Sattel_1'], mode='train') #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
     nclear, nfog = x.get_balancedness()
     img, lbl = x.__getitem__(0)
-    print('nfog, nclear: ', nfog, nclear) 
+    print('nfog, nclear: ', nfog, nclear)
     print('total number of labeled images: ', x.__len__())
