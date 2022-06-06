@@ -44,7 +44,7 @@ STATCAM_LST = [
     ]
 
 BASE_PATH = '../datasets/dataset_downsampled/DischmaCams/'
-CAMSTAT = 'Sattel/1'  # may be changed (to one of STATCAM_LST)
+CAMSTAT = 'Stillberg/1'  # may be changed (to one of STATCAM_LST), todo Giementaelli 1,2,3 / Stillberg 1 - do on 07.06.2022
 
 ext = ('.png', '.jpg')
 manual_labels_file = os.path.join(BASE_PATH, CAMSTAT, 'manual_labels_isfoggy.txt')
@@ -69,7 +69,8 @@ with open(file=manual_labels_file, mode='a') as txtfile:
             continue
 
         # if (file[0:4] == '2020' or file[0:4] == '2021') and file.endswith(ext):  # only label files of 2020/2021 
-        if (file[0:4] == '2021' and file[4:6] in ['01', '04', '07', '10']):  # only label data that will be used for validation (some months of 2021)
+        # if (file[0:4] == '2021' and file[4:6] in ['01', '04', '07', '10']):  # only label data that will be used for validation (some months of 2021)
+        if (file[0:4] == '2020' and file[6:8] in ['10', '25']):  # label data that will be used for testing (days 10 and 25 of each month in 2020)
             line = file + ' '
             usage_string = 'Usage: \n f: (F)oggy \n n: (N)ot foggy \n q: (Q)uit'
             img = cv2.imread(os.path.join(BASE_PATH, CAMSTAT, file))  # read a colour image from the working directory
@@ -104,4 +105,5 @@ with open(file=manual_labels_file, mode='a') as txtfile:
         if cont == True:
             continue
 
-print('everything from years 2021 (months: 01,04,07,10) classified (if not exited with q)')
+# print('everything from years 2021 (months: 01,04,07,10) classified (if not exited with q)')
+print(f'everything from {CAMSTAT} and year 2020 (days: 10,25) classified (if not exited with q)')
