@@ -44,7 +44,7 @@ STATCAM_LST = [
     ]
 
 BASE_PATH = '../datasets/dataset_downsampled/DischmaCams/'
-CAMSTAT = 'Stillberg/1'  # may be changed (to one of STATCAM_LST), todo Giementaelli 1,2,3 / Stillberg 1 - do on 07.06.2022
+CAMSTAT = 'Giementaelli/3'  # may be changed (to one of STATCAM_LST), todo Giementaelli 1(312),2(238),3(337) - do on 07.06.2022
 
 ext = ('.png', '.jpg')
 manual_labels_file = os.path.join(BASE_PATH, CAMSTAT, 'manual_labels_isfoggy.txt')
