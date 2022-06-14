@@ -65,7 +65,7 @@ def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
             f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
             'n_epoch' : ep,
             'batch_iteration' : bi})
-        
+
         print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
 
@@ -91,11 +91,11 @@ def print_grid(x, y, batchsize, bi):
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
-    
+
     batch_iteration = {}
     batch_iteration['train'] = 0
     batch_iteration['val'] = 0
-    
+
     for epoch in range(num_epochs):
         print('\n', '-' * 10)
 
@@ -262,7 +262,7 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 LOG_EVERY = 200
-LOAD_MODEL = True
+LOAD_MODEL = False
 
 
 ############ DATASETS AND DATALOADERS ############
@@ -277,18 +277,20 @@ dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CA
 """
 dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
 dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
 
 print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
+dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)
 
 # Note:
 #   class 0: not foggy
 #   class 1: foggy
 
 
-############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############
+############ MODEL, LOSS, OPTIMIZER, SCHEDULER ############
 
 if WEIGHTED == 'False':
     weights = None
