@@ -82,19 +82,20 @@ class DischmaSet_classification():
         self.root = root
         self.stat_cam_lst = stat_cam_lst
         self.mode = mode
+        
+        self.DAYS_TRAIN = [str(ele).zfill(2) for ele in list(range(1, 24+1))]  # days 1 to 24 for training, residual days for validation
+        self.DAYS_TEST = ['10', '25']
+
+        # self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
+        # self.MONTHS_MANUAL = ['01', '04', '07', '10']
+        # self.MONTHS_TRAIN_VAL = ['01', '04', '07', '10']
+        # self.MONTHS_TEST = ['02', '05', '08', '11']
+
         self.YEAR_TRAIN = '2020'
         self.YEAR_VAL = '2021'
-        self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
-        self.YEAR_MANUAL = '2021'
-        self.MONTHS_MANUAL = ['01', '04', '07', '10']
-
-        self.YEAR_TRAIN_VAL = '2021'
-        self.MONTHS_TRAIN_VAL = ['01', '04', '07', '10']
-        # self.DAYS_TRAIN = list(range(1, 24+1))  # days 1 to 24 for training, residual days for validation
-        self.DAYS_TRAIN = [str(ele).zfill(2) for ele in list(range(1, 24+1))]
         self.YEAR_TEST = '2020'
-        self.MONTHS_TEST = ['02', '05', '08', '11']
-        self.DAYS_TEST = ['10', '25']
+        # self.YEAR_MANUAL = '2021'
+        self.YEAR_TRAIN_VAL = '2021'
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -180,7 +181,7 @@ class DischmaSet_classification():
                 """
 
                 if self.mode == 'train' and raw_img_name[0:4] in self.YEAR_TRAIN_VAL and raw_img_name[6:8] in self.DAYS_TRAIN:
-                    # training data is manually labelled from 2021 (from 1st to 29th)
+                    # training data is manually labelled from 2021 (from 1st to 24th)
                     if os.path.isfile(self.full_path_manual_labels):
                         img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
                         if img_is_foggy is not None:
@@ -198,12 +199,30 @@ class DischmaSet_classification():
 
                 if self.mode == 'test' and raw_img_name[0:4] == self.YEAR_TEST and raw_img_name[6:8] in self.DAYS_TEST: # and raw_img_name[4:6] in self.MONTHS_TEST   # use manual labels
                     # testing data is manually labelled from 2020 (each 10th and 25th from each month)
-                    # note: same code snippet as above - ev create function for this snippet
+
+                    # TODO: check that labels from SLF exist, then get manual labels (from txt file)
+                    
+                    A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
+                    if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
+                        if os.path.isfile(self.full_path_manual_labels):
+                            img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                            if img_is_foggy is not None:
+                                self.is_foggy.append(int(img_is_foggy))
+                                self.path_list_valid.append(full_path_img)
+
+                if self.mode == 'baseline' and raw_img_name[0:4] == self.YEAR_TEST and raw_img_name[6:8] in self.DAYS_TEST: # and raw_img_name[4:6] in self.MONTHS_TEST   # use manual labels
+                    # check that manual label exists (to get same as for test set), then get labels from SLF
                     if os.path.isfile(self.full_path_manual_labels):
                         img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
                         if img_is_foggy is not None:
-                            self.is_foggy.append(int(img_is_foggy))
-                            self.path_list_valid.append(full_path_img)
+                            
+                            A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
+                            if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation did not exist (or did not contain row with name of image)
+                                a0_passed_th, fog_passed_th = check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_idx_far0)
+                                used_for_comp = a0_passed_th and fog_passed_th  # one bool, whether this img was used for composite image generation
+                                img_is_foggy = not(used_for_comp)  # image is considered as foggy if it was not used for the composite image generation
+                                self.is_foggy.append(int(img_is_foggy))
+                                self.path_list_valid.append(full_path_img)  
 
         """
         # only needed if train/val data is randomly split into train/test split, above solution is done with weeks/days (train: weeks 1-3 (resp. days 1-24), val: 4 (resp. days 24-last))
@@ -259,7 +278,7 @@ class DischmaSet_classification():
         # transformations
         if self.mode == 'train':  # only do augmentation in training
             tf1 = self.train_augmentation(image)
-        elif self.mode == 'val':
+        else:
             tf1 = image
         """
         # test plots:
@@ -282,8 +301,9 @@ class DischmaSet_classification():
 
 
 if __name__=='__main__':
-    x = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_2', 'Sattel_1'], mode='train') #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
-    nclear, nfog = x.get_balancedness()
-    img, lbl = x.__getitem__(0)
+    set1 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='baseline')  #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
+    set2 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='test')  #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
+    nclear, nfog = set1.get_balancedness()
+    img, lbl = set1.__getitem__(0)
     print('nfog, nclear: ', nfog, nclear)
-    print('total number of labeled images: ', x.__len__())
+    print('total number of labeled images: ', set1.__len__())
