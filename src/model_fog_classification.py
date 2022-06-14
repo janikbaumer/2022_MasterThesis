@@ -10,7 +10,7 @@ import random
 
 import numpy as np
 from time import time
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, recall_score, precision_score
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, recall_score, precision_score, precision_recall_curve
 
 from torch.utils.data import DataLoader, random_split
 from torch import nn
@@ -41,20 +41,37 @@ print('imports done')
 
 ################# FUNCTIONS ######################
 
+def get_optimal_f1_score():
+    pass
+
+def get_best_threshold():
+    # from vector of predictions, get best threshold
+    pass
+
 def get_balance(dset):
     lst = []
     for ele in dset:
         lst.append(dset[ele][1])
 
 
-def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
-    
+def get_and_log_metrics(yt, ypred, ylogits, ep, batch_it_loss, ph, bi=0):
+    """
+    yt, ypred: lists
+    yprob: torch tensor
+    """
+    yprobab = torch.sigmoid(ylogits)  # [log_every*batchsize, 2] probas between 0 and 1
+    yprobab_neg = yprobab[:, 0]
+    yprobab_pos = yprobab[:, 1]  # compute precision and recall for class one
     acc = accuracy_score(y_true=yt, y_pred=ypred)
     prec = precision_score(y_true=yt, y_pred=ypred)
     rec = recall_score(y_true=yt, y_pred=ypred)
     f1 = f1_score(y_true=yt, y_pred=ypred)
 
+    f1_opt = get_optimal_f1_score()
+    precs, recs, Threshs = precision_recall_curve(yt, yprobab_pos.detach().cpu())  
+
     if LOGGING:
+        table = wandb.Table(data=[[x, y] for (x, y) in zip(precs[::len(precs)//9800], recs[::len(recs)//9800])], columns = ["Precision", "Recall"]) 
         wandb.log({
             f'{ph}/loss' : batch_it_loss,
             f'{ph}/accuracy' : acc,
@@ -62,7 +79,8 @@ def get_and_log_metrics(yt, ypred, yprob, ep, batch_it_loss, ph, bi=0):
             f'{ph}/recall' : rec,  # this should be high !!! (to catch all foggy images)
             f'{ph}/F1-score' : f1,
             f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
-            f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob, labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            f'{ph}/PR_Curve' : wandb.plot.line(table, 'Precision', 'Recall', title='PR-Curve'),
             'n_epoch' : ep,
             'batch_iteration' : bi})
 
@@ -106,7 +124,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             if phase == 'train':
                 model.train()
                 dloader = dloader_train
-                
+
             else:
                 model.eval()
                 dloader = dloader_val
@@ -114,7 +132,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             running_loss = 0  # loss (to be updated during batch iteration)
 
             y_true_total = []
-            y_pred_probab_total = []
+            y_pred_probab_total = None
+            y_pred_logits_total = None
             y_pred_binary_total = []
 
 
@@ -139,20 +158,28 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                 # forward pass, track history (calc gradients) only in training
                 with torch.set_grad_enabled(phase == 'train'):
-                    pred = model(x)  # probabilities (for class 0 and 1) / shape: batchsize, nclasses (8,2)
-                    y_probab = pred[:,1]   # probability for class one / shape: batchsize (8) / vals in range (0,1)
-                    pred_binary = pred.argmax(dim=1)   # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true)
-                    loss = criterion(pred, y)
+                    pred_logits = model(x)  # predictions (logits) (for class 0 and 1) / shape: batchsize, nclasses (8,2)
 
+                    y_pred_logits_neg = pred_logits[:, 0]  # [8]
+                    y_pred_logits_pos = pred_logits[:, 1]  # [8]
+
+
+                    # y_probab = pred_logits[:,1]   # probability for class one: pred[:,1] / shape: batchsize (8)
+                    # y_probab = pred_logits
+
+                    pred_binary = pred_logits.argmax(dim=1)  # [8], threshold 0.5 # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true)
+
+                    loss = criterion(pred_logits, y)
                     if phase == 'train':
                         loss.backward()  # backprop
                         optimizer.step()  # update params
 
                 # stats
-
                 y_true = y.cpu().tolist()
-                y_pred_probab = y_probab.cpu().tolist()  # prob for class one
-                y_pred_binary = pred_binary.cpu().tolist()
+
+                # y_pred_probab = y_probab.cpu().tolist()  # prob for class one
+                # y_pred_probab = y_probab
+                y_pred_binary = pred_binary.cpu().tolist() 
 
                 # debug - problematic: y_pred_binary is full with 0 (1 never gets predicted)
                 #print(y_true)
@@ -160,8 +187,12 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 #print()
 
                 y_true_total.extend(y_true)
-                y_pred_probab_total.extend(y_pred_probab)
                 y_pred_binary_total.extend(y_pred_binary)
+                # y_pred_probab_total.extend(y_pred_probab)
+                if batch_iteration[phase] % len(dloader) != 1:
+                    y_pred_logits_total = torch.cat((y_pred_logits_total, pred_logits))
+                else:
+                    y_pred_logits_total = pred_logits
 
                 # losses
                 batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
@@ -183,7 +214,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over {LOG_EVERY} batch iterations): {loss}')
 
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
 
                         running_loss = 0
 
@@ -192,7 +223,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss = running_loss/len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
 
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, yprob=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ylogits=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
 
             if phase == 'train':  # at end of epoch (training, could also be end of validation)
@@ -261,7 +292,7 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 
 N_CLASSES = 2
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
-LOG_EVERY = 200
+LOG_EVERY = 15
 LOAD_MODEL = False
 
 
@@ -279,7 +310,7 @@ dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_
 dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
 
-print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
+print(f'Dischma sets (train, val and test) with data from {STATIONS_CAM_LST} created.')
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
@@ -348,3 +379,4 @@ elif LR_SCHEDULER == 'None':
 print('criterion: ', criterion, 'optimizer: ', optimizer, 'lr scheduler: ', exp_lr_scheduler)
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
+
