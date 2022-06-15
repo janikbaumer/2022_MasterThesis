@@ -1,5 +1,4 @@
 # jbaumer
-
 # calculate metrics for different datasets (1x/cam + 1 for all cams)
 
 from re import T
@@ -71,7 +70,7 @@ prec = precision_score(y_GT, y_pred_baseline)
 rec = recall_score(y_GT, y_pred_baseline)
 f1 = f1_score(y_GT, y_pred_baseline)
 
-
+print('from cam: ', STATIONS_CAM_LST)
 print('accuracy: ', acc)
 print('precision: ', prec)
 print('recall: ', rec)
