@@ -107,6 +107,62 @@ def print_grid(x, y, batchsize, bi):
     plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{bi}')
 
 
+def test_model(model):
+    # with trained model, predict class for every x,y in test set
+    # log the respective metrics (only one per metric)
+    # plot the incorrect classifications
+
+    time_start = time()
+    epoch = 0
+    batch_iteration = {}
+    batch_iteration['test'] = 0
+
+    phase = 'test'
+    print(f'{phase} phase starting...')
+    model.eval()
+    dloader = dloader_test
+
+    running_loss = 0  # loss (to be updated during batch iteration)
+    y_true_total = []
+    y_pred_probab_total = None
+    y_pred_logits_total = None
+    y_pred_binary_total = []
+
+    for x, y in tqdm(dloader):
+        batch_iteration[phase] += 1
+
+        # move to GPU
+        x = x.to(device)
+        y = y.to(device)
+
+        with torch.set_grad_enabled(phase == 'train'):
+            pred_logits = model(x)  # predictions (logits) (for class 0 and 1) / shape: batchsize, nclasses (8,2)
+            pred_binary = pred_logits.argmax(dim=1)  # [8], threshold 0.5 # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true)
+            loss = criterion(pred_logits, y)
+
+        # stats
+        y_true = y.cpu().tolist()
+        y_pred_binary = pred_binary.cpu().tolist()
+
+        y_true_total.extend(y_true)
+        y_pred_binary_total.extend(y_pred_binary)
+
+        # losses
+        batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
+        running_loss += batch_loss
+
+
+        if batch_iteration[phase]%len(dloader) == 0:  # after having seen the whole test set, do logging
+            loss = running_loss/len(dloader)
+            print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
+
+            get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ylogits=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+
+    time_end = time()
+    time_elapsed = time_end - time_start
+    print(f'training and validation (on {device}) completed in {time_elapsed} seconds.')
+
+
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
 
@@ -236,6 +292,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
     # saving model
     torch.save(obj=model, f=PATH_MODEL)
+
 
 
 ############ REPRODUCIBILITY ############
@@ -380,3 +437,4 @@ print('criterion: ', criterion, 'optimizer: ', optimizer, 'lr scheduler: ', exp_
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
 
+test_model(model=model)
