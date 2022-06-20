@@ -27,24 +27,34 @@ def write_to_file(string, textfile):
     os.system(f"grep -q {string} {textfile} || echo {string} >> {textfile}")
 """
 
+# get n labeled examples from test set
+# cat manual_labels_isfoggy.txt | grep -e 2020[0-9][0-9]03 -e 2020[0-9][0-9]10 -e 2020[0-9][0-9]17 -e 2020[0-9][0-9]25 | wc -l
+
+# get n images to be labeled (in total)
+# ls 2020??03??????.* 2020??10??????.* 2020??17??????.* 2020??25??????.* | wc -l
+
 STATCAM_LST = [
-    'Buelenberg/1',
-    'Buelenberg/2',
-    'Giementaelli/1',
-    'Giementaelli/2',
-    'Giementaelli/3',
-    'Luksch/1',
-    'Luksch/2',
-    'Sattel/1',
-    'Sattel/2',
-    'Sattel/3',
-    'Stillberg/1',
-    'Stillberg/2',
-    'Stillberg/3'
+    'Buelenberg/1',     # done
+    'Buelenberg/2',     # done
+    'Giementaelli/1',   # done
+    'Giementaelli/2',   # done
+    'Giementaelli/3',   # done
+    'Luksch/1',         # done
+    'Luksch/2',         # done
+    'Sattel/1',         # done
+    'Sattel/2',         # done
+    'Sattel/3',         # done
+    'Stillberg/1',      # done
+    'Stillberg/2',      # done
+    'Stillberg/3'       # 370 - 688 (days 10&25 - days 03&10&17&25)
     ]
 
+# todo. label some more for test set - only 2 days a months are too little, as not all can be used
+# because they also need to be found in txt files from SLF classification for comparison to baseline
+# -> label days 03, 10, 17, 25 from each month in 2020
+
 BASE_PATH = '../datasets/dataset_downsampled/DischmaCams/'
-CAMSTAT = 'Giementaelli/3'  # may be changed (to one of STATCAM_LST), todo Giementaelli 1(312),2(238),3(337) - do on 07.06.2022
+CAMSTAT = 'Stillberg/3'  # may be changed (to one of STATCAM_LST)
 
 ext = ('.png', '.jpg')
 manual_labels_file = os.path.join(BASE_PATH, CAMSTAT, 'manual_labels_isfoggy.txt')
@@ -69,8 +79,8 @@ with open(file=manual_labels_file, mode='a') as txtfile:
             continue
 
         # if (file[0:4] == '2020' or file[0:4] == '2021') and file.endswith(ext):  # only label files of 2020/2021 
-        # if (file[0:4] == '2021' and file[4:6] in ['01', '04', '07', '10']):  # only label data that will be used for validation (some months of 2021)
-        if (file[0:4] == '2020' and file[6:8] in ['10', '25']):  # label data that will be used for testing (days 10 and 25 of each month in 2020)
+        #if (file[0:4] == '2021' and file[4:6] in ['01', '04', '07', '10']):  # only label data that will be used for training/validation (some months of 2021)
+        if (file[0:4] == '2020' and file[6:8] in ['03', '10', '17', '25']):  # label data that will be used for testing (days 10 and 25 of each month in 2020)
             line = file + ' '
             usage_string = 'Usage: \n f: (F)oggy \n n: (N)ot foggy \n q: (Q)uit'
             img = cv2.imread(os.path.join(BASE_PATH, CAMSTAT, file))  # read a colour image from the working directory
@@ -106,4 +116,4 @@ with open(file=manual_labels_file, mode='a') as txtfile:
             continue
 
 # print('everything from years 2021 (months: 01,04,07,10) classified (if not exited with q)')
-print(f'everything from {CAMSTAT} and year 2020 (days: 10,25) classified (if not exited with q)')
+print(f'everything from {CAMSTAT} and year 2020 (days: 03, 10, 17, 25) classified (if not exited with q)')
