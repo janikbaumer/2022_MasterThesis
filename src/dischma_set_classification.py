@@ -84,7 +84,7 @@ class DischmaSet_classification():
         self.mode = mode
         
         self.DAYS_TRAIN = [str(ele).zfill(2) for ele in list(range(1, 24+1))]  # days 1 to 24 for training, residual days for validation
-        self.DAYS_TEST = ['10', '25']
+        self.DAYS_TEST = ['03', '10', '17', '25']
 
         # self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
         # self.MONTHS_MANUAL = ['01', '04', '07', '10']
