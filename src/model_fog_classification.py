@@ -41,6 +41,7 @@ print('imports done')
 
 ################# FUNCTIONS ######################
 
+"""
 def get_optimal_f1_score():
     pass
 
@@ -52,39 +53,184 @@ def get_balance(dset):
     lst = []
     for ele in dset:
         lst.append(dset[ele][1])
+"""
 
+def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
+    prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
+    F1s_vec =  (1 + BETA**2)* (prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
+    best_ind = np.argmax(F1s_vec) 
+    opt_f1 = F1s_vec[best_ind]  # optimal f1-score
+    opt_prec, opt_rec = prec_vec[best_ind], rec_vec[best_ind]
+    opt_thresh = th_vec[best_ind]
+    table = wandb.Table(data=[[x, y] for (x, y) in zip(prec_vec, rec_vec)], columns = ["Precision", "Recall"])
+    # table = wandb.Table(data=[[x, y] for (x, y) in zip(precs[::len(precs)//9800], recs[::len(recs)//9800])], columns = ["Precision", "Recall"]) 
 
-def get_and_log_metrics(yt, ypred, ylogits, ep, batch_it_loss, ph, bi=0):
+    return opt_prec, opt_rec, opt_f1, opt_thresh, table
+
+def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, ypred_th_optimal=None):
     """
-    yt, ypred: lists
+    yt, ypred_th_std: lists
     yprob: torch tensor
     """
-    yprobab = torch.sigmoid(ylogits)  # [log_every*batchsize, 2] probas between 0 and 1
+    yprobab = torch.softmax(ylogits, dim=1)  # [log_every*batchsize, 2] probas between 0 and 1
     yprobab_neg = yprobab[:, 0]
     yprobab_pos = yprobab[:, 1]  # compute precision and recall for class one
-    acc = accuracy_score(y_true=yt, y_pred=ypred)
-    prec = precision_score(y_true=yt, y_pred=ypred)
-    rec = recall_score(y_true=yt, y_pred=ypred)
-    f1 = f1_score(y_true=yt, y_pred=ypred)
 
-    f1_opt = get_optimal_f1_score()
-    precs, recs, Threshs = precision_recall_curve(yt, yprobab_pos.detach().cpu())  
+    acc_std = accuracy_score(y_true=yt, y_pred=ypred_th_std)
+    prec_std = precision_score(y_true=yt, y_pred=ypred_th_std)
+    rec_std = recall_score(y_true=yt, y_pred=ypred_th_std)
+    f1_std = f1_score(y_true=yt, y_pred=ypred_th_std)
 
     if LOGGING:
-        table = wandb.Table(data=[[x, y] for (x, y) in zip(precs[::len(precs)//9800], recs[::len(recs)//9800])], columns = ["Precision", "Recall"]) 
-        wandb.log({
+        print(f'logging the {ph} set metrics...')
+
+        if ph == 'train':
+            wandb.log({
+                'n_epoch' : ep,
+                'batch_iteration' : bi,
+                f'{ph}/loss' : batch_it_loss,
+
+                f'{ph}/accuracy_th_std' : acc_std,
+                f'{ph}/precision_th_std' : prec_std,
+                f'{ph}/recall_th_std' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/F1-score_th_std' : f1_std,
+                f'{ph}/conf_mat_th_std' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+                #f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprobab.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+                })
+        
+        if ph == 'val':
+            # also log p-r-curve
+            # also log optimal metrics
+            # also get optimal threshold
+            
+            # get optimal metrics
+            opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+
+            global OPTIMAL_THRESHOLD
+            OPTIMAL_THRESHOLD = opt_thresh  # after last loop, this variable can be taken for test set threshold (as other fct-call, make variable global), is used is test-function
+
+            wandb.log({
+            'n_epoch' : ep,
+            'batch_iteration' : bi,
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+
+            f'{ph}/threshold_standard/accuracy' : acc_std,
+            f'{ph}/threshold_standard/precision' : prec_std,
+            f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+            f'{ph}/threshold_standard/F1-score' : f1_std,
+            f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+
+            f'{ph}/threshold_optimal/precision' : opt_prec,
+            f'{ph}/threshold_optimal/recall' : opt_rec,
+            f'{ph}/threshold_optimal/f1-score' : opt_f1,
+            
+            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh
+            })
+
+        if ph == 'test':
+            # get optimal metrics
+            acc_optimal = accuracy_score(y_true=yt, y_pred=ypred_th_optimal)
+            prec_optimal = precision_score(y_true=yt, y_pred=ypred_th_optimal)
+            rec_optimal = recall_score(y_true=yt, y_pred=ypred_th_optimal)
+            f1_optimal = f1_score(y_true=yt, y_pred=ypred_th_optimal)
+
+            #opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+
+            
+
+            wandb.log({
+            'n_epoch' : ep,
+            'batch_iteration' : bi,
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+
+            f'{ph}/threshold_standard/accuracy' : acc_std,
+            f'{ph}/threshold_standard/precision' : prec_std,
+            f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+            f'{ph}/threshold_standard/F1-score' : f1_std,
+            f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+            
+            f'{ph}/threshold_optimal/accuracy' : acc_optimal,
+            f'{ph}/threshold_optimal/precision' : prec_optimal,
+            f'{ph}/threshold_optimal/recall' : rec_optimal,
+            f'{ph}/threshold_optimal/f1-score' : f1_optimal,
+            
+            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh
+            })
+
+        print('logging complete.')
+
+
+        """
+        ### OLD 
+        if ph == 'train' or ph == 'test':
+            if ypred_th_optimal is None:
+                wandb.log({
+                f'{ph}/loss' : batch_it_loss,
+                f'{ph}/accuracy' : acc_std,
+                f'{ph}/precision' : prec_std,
+                f'{ph}/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/F1-score' : f1_std,
+                f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+                f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprobab.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+                #f'{ph}/PR_Curve' : wandb.plot.line(table, 'Precision', 'Recall', title='PR-Curve'),
+                'n_epoch' : ep,
+                'batch_iteration' : bi})
+            else: # if ypred_th_optimal is not None (testing), log also metrics with optimal threshold
+                wandb.log({
+                f'{ph}/loss' : batch_it_loss,
+                f'{ph}/accuracy_std' : acc_std,
+                f'{ph}/precision_std' : prec_std,
+                f'{ph}/recall_std' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/F1-score_std' : f1_std,
+
+                f'{ph}/conf_mat_std' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+                f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprobab.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+                #f'{ph}/PR_Curve' : wandb.plot.line(table, 'Precision', 'Recall', title='PR-Curve'),
+                'n_epoch' : ep,
+                'batch_iteration' : bi})
+        elif ph == 'val':
+            # also log p-r-curve
+            # also log optimal f1-score
+            wandb.log({
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/accuracy' : acc_std,
+            f'{ph}/precision' : prec_std,
+            f'{ph}/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+            f'{ph}/F1-score' : f1_std,
+            f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+            #f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprobab.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            f'{ph}/PR_Curve' : wandb.plot.line(table, 'Precision', 'Recall', title='PR-Curve'),
+            f'{ph}/optimal_precision' : opt_prec,
+            f'{ph}/optimal_recall' : opt_rec,
+            f'{ph}/optimal_f1' : opt_f1,
+            f'{ph}/optimal_threshold' : opt_thresh,
+            'n_epoch' : ep,
+            'batch_iteration' : bi})
+            
+            # TODO: return optimal threshold, classify test data with this given threshold
+            print()
+        
+        elif ph == 'test':
+            wandb.log({
             f'{ph}/loss' : batch_it_loss,
             f'{ph}/accuracy' : acc,
             f'{ph}/precision' : prec,
             f'{ph}/recall' : rec,  # this should be high !!! (to catch all foggy images)
             f'{ph}/F1-score' : f1,
             f'{ph}/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
-            f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprob.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
-            f'{ph}/PR_Curve' : wandb.plot.line(table, 'Precision', 'Recall', title='PR-Curve'),
+            #f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprobab.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+            f'{ph}/PR_Curve (for class 1)' : wandb.plot.line(table, 'Precision', 'Recall', title='PR-Curve'),
+            f'{ph}/optimal_precision' : opt_prec,
+            f'{ph}/optimal_recall' : opt_rec,
+            f'{ph}/optimal_f1' : opt_f1,
+            f'{ph}/optimal_threshold' : opt_thresh,
             'n_epoch' : ep,
             'batch_iteration' : bi})
+        """
 
-        print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
+        # print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
 
 def get_train_val_split(dset_full):
@@ -126,7 +272,8 @@ def test_model(model):
     y_true_total = []
     y_pred_probab_total = None
     y_pred_logits_total = None
-    y_pred_binary_total = []
+    y_pred_binary_total_th_std = []
+    y_pred_binary_total_th_optimal = []
 
     for x, y in tqdm(dloader):
         batch_iteration[phase] += 1
@@ -137,15 +284,32 @@ def test_model(model):
 
         with torch.set_grad_enabled(phase == 'train'):
             pred_logits = model(x)  # predictions (logits) (for class 0 and 1) / shape: batchsize, nclasses (8,2)
-            pred_binary = pred_logits.argmax(dim=1)  # [8], threshold 0.5 # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true)
             loss = criterion(pred_logits, y)
+            
+            yprobab = torch.softmax(pred_logits, dim=1)  # [log_every*batchsize, 2] probas between 0 and 1, sum up to one
+            #yprobab_neg = yprobab[:, 0]
+            yprobab_pos = yprobab[:, 1]  # compute metrics for class one            
+            
+            threshold = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
+
+            pred_binary_th_std = yprobab.argmax(dim=1)  # threshold 0.5 # either 0 or 1 / shape: batchsize (8) / takes higher probablity (from the two classes) to compare to y (y_true)
+            pred_binary_th_optimal = (yprobab_pos > threshold).float()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
+
+
 
         # stats
         y_true = y.cpu().tolist()
-        y_pred_binary = pred_binary.cpu().tolist()
+        y_pred_binary_th_std = pred_binary_th_std.cpu().tolist()
+        y_pred_binary_th_optimal = pred_binary_th_optimal.cpu().tolist()
 
         y_true_total.extend(y_true)
-        y_pred_binary_total.extend(y_pred_binary)
+        y_pred_binary_total_th_std.extend(y_pred_binary_th_std)
+        y_pred_binary_total_th_optimal.extend(y_pred_binary_th_optimal)
+
+        if batch_iteration[phase] % len(dloader) != 1:
+            y_pred_logits_total = torch.cat((y_pred_logits_total, pred_logits))
+        else:
+            y_pred_logits_total = pred_logits
 
         # losses
         batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
@@ -156,11 +320,12 @@ def test_model(model):
             loss = running_loss/len(dloader)
             print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
 
-            get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ylogits=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+            # TODO adapt function, log with std and optimal threshold
+            get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total_th_std, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase], ypred_th_optimal=y_pred_binary_total_th_optimal)
 
     time_end = time()
     time_elapsed = time_end - time_start
-    print(f'training and validation (on {device}) completed in {time_elapsed} seconds.')
+    print(f'testing (on {device}) completed in {time_elapsed} seconds.')
 
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
@@ -270,16 +435,16 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over {LOG_EVERY} batch iterations): {loss}')
 
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
 
                         running_loss = 0
 
                 if phase == 'val':
-                    if batch_iteration[phase]%len(dloader) == 0:
+                    if batch_iteration[phase]%len(dloader) == 0:  # last validation loop
                         loss = running_loss/len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
 
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ylogits=y_pred_probab_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
 
             if phase == 'train':  # at end of epoch (training, could also be end of validation)
@@ -322,6 +487,9 @@ parser.add_argument('--weighted', help='how to weight the classes (manual: as gi
 parser.add_argument('--path_dset', help='path to used dataset ')
 parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and if so after how many epochs to reduced LR')
 parser.add_argument('--model', help='choose model type')
+parser.add_argument('--optim', help='set type of optimizer (Adam or SGD)')
+parser.add_argument('--weight_decay', type=float, help='set weight decay (used for Adam and for SGD')
+parser.add_argument('--momentum', type=float, help='set momentum used for SGD optimizer')
 
 args = parser.parse_args()
 
@@ -342,14 +510,19 @@ WEIGHTED = args.weighted
 PATH_DATASET = args.path_dset
 LR_SCHEDULER = args.lr_scheduler
 MODEL_TYPE = args.model
+OPTIM = args.optim
+WEIGHT_DECAY = args.weight_decay
+MOMENTUM = args.momentum
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
 STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
 N_CLASSES = 2
+BETA = 1
+EPSILON = 0
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
-LOG_EVERY = 15
+LOG_EVERY = 200
 LOAD_MODEL = False
 
 
@@ -372,7 +545,7 @@ print(f'Dischma sets (train, val and test) with data from {STATIONS_CAM_LST} cre
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)
-
+print('lengths (train, val, test dloader): ', len(dloader_train), len(dloader_val), len(dloader_test))
 # Note:
 #   class 0: not foggy
 #   class 1: foggy
@@ -428,9 +601,13 @@ model = model.to(device)
 
 # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 criterion = nn.CrossEntropyLoss(reduction='mean', weight=weights)
-optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=0.1)
+if OPTIM == 'SGD':
+    optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY, momentum=MOMENTUM)
+elif OPTIM == 'Adam':
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)  # weight_decay: It is used for adding the l2 penality to the loss (default = 0)
+
 if LR_SCHEDULER != 'None':
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.5)  # Decay LR by a factor of gamma every 'step_size' epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.8)  # Decay LR by a factor of gamma every 'step_size' epochs
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 print('criterion: ', criterion, 'optimizer: ', optimizer, 'lr scheduler: ', exp_lr_scheduler)
