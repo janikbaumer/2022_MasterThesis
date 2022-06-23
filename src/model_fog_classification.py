@@ -106,7 +106,7 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             # get optimal metrics
             opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
 
-            global OPTIMAL_THRESHOLD
+            global OPTIMAL_THRESHOLD  # where best f1-score is achieved
             OPTIMAL_THRESHOLD = opt_thresh  # after last loop, this variable can be taken for test set threshold (as other fct-call, make variable global), is used is test-function
 
             wandb.log({
@@ -137,13 +137,11 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
 
             #opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
 
-            
-
             wandb.log({
             'n_epoch' : ep,
             'batch_iteration' : bi,
             f'{ph}/loss' : batch_it_loss,
-            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+            # f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
 
             f'{ph}/threshold_standard/accuracy' : acc_std,
             f'{ph}/threshold_standard/precision' : prec_std,
@@ -156,7 +154,7 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             f'{ph}/threshold_optimal/recall' : rec_optimal,
             f'{ph}/threshold_optimal/f1-score' : f1_optimal,
             
-            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh
+            f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD
             })
 
         print('logging complete.')
