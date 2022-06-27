@@ -274,7 +274,7 @@ class DischmaSet_classification():
             shp_new = tuple(int(x/self.DOWNSCALE_FACTOR) for x in shp)
             image = F.resize(img=image, size=shp_new)
         
-        # check if shape is actually (600x400)
+        # check if shape is actually (400x600)
         if image.shape[1:] != torch.Size([400, 600]):
             image = F.resize(img=image, size=(400, 600))
 
