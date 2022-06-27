@@ -115,7 +115,7 @@ class DischmaSet_classification():
             transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
         ]), p=1)
 
-        self.val_augmentation = self.normalize
+        self.val_test_augmentation = self.normalize
 
         # already done in preprocessing - manually saved and working with those
         self.DOWNSCALE_FACTOR = 1  # 1 for no downsampling, else height and width is (each) downscaled by this factor
@@ -273,13 +273,18 @@ class DischmaSet_classification():
             shp = tuple(image.shape[-2:])  # (600, 400)
             shp_new = tuple(int(x/self.DOWNSCALE_FACTOR) for x in shp)
             image = F.resize(img=image, size=shp_new)
+        
+        # check if shape is actually (600x400)
+        if image.shape[1:] != torch.Size([400, 600]):
+            image = F.resize(img=image, size=(600, 400))
+
         image = image/255  # convert to floats between 0 and 1  (normalization / standardization)
 
         # transformations
         if self.mode == 'train':  # only do augmentation in training
             tf1 = self.train_augmentation(image)
         else:
-            tf1 = image
+            tf1 = self.val_test_augmentation(image)
         """
         # test plots:
         plt.imshow(np.transpose(image.numpy(), (1,2,0)))
