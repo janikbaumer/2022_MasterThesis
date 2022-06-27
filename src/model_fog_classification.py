@@ -544,6 +544,11 @@ dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=Tr
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)
 print('lengths (train, val, test dloader): ', len(dloader_train), len(dloader_val), len(dloader_test))
+print('distribution of neg, pos labels: ')
+print(f'for train set: {dset_train.get_balancedness()}')
+print(f'for val set: {dset_val.get_balancedness()}')
+print(f'for test set: {dset_test.get_balancedness()}')
+
 # Note:
 #   class 0: not foggy
 #   class 1: foggy
