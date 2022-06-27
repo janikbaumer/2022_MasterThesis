@@ -276,7 +276,7 @@ class DischmaSet_classification():
         
         # check if shape is actually (600x400)
         if image.shape[1:] != torch.Size([400, 600]):
-            image = F.resize(img=image, size=(600, 400))
+            image = F.resize(img=image, size=(400, 600))
 
         image = image/255  # convert to floats between 0 and 1  (normalization / standardization)
 
