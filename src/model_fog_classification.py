@@ -273,7 +273,7 @@ def test_model(model):
     y_pred_binary_total_th_std = []
     y_pred_binary_total_th_optimal = []
 
-    for x, y in tqdm(dloader):
+    for x, y in dloader:
         batch_iteration[phase] += 1
 
         # move to GPU
@@ -356,7 +356,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             y_pred_binary_total = []
 
 
-            for x, y in tqdm(dloader):
+            for x, y in dloader:
                 #for i in range(1000):
                 batch_iteration[phase] += 1
 
@@ -494,7 +494,6 @@ args = parser.parse_args()
 LOGGING = True
 if LOGGING:
     wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # set device
 
 
