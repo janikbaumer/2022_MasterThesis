@@ -307,9 +307,9 @@ class DischmaSet_classification():
 
 
 if __name__=='__main__':
-    set1 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='baseline')  #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
-    set2 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='test')  #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
-    nclear, nfog = set1.get_balancedness()
-    img, lbl = set1.__getitem__(0)
-    print('nfog, nclear: ', nfog, nclear)
-    print('total number of labeled images: ', set1.__len__())
+    # set1 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='baseline')  #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
+    set2 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='val')  #['Buelenberg_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2'], mode='full_v2')
+    #nclear, nfog = set1.get_balancedness()
+    img, lbl = set2.__getitem__(0)
+    #print('nfog, nclear: ', nfog, nclear)
+    #print('total number of labeled images: ', set1.__len__())
