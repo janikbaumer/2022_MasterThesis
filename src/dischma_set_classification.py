@@ -110,7 +110,7 @@ class DischmaSet_classification():
             self.normalize,
             transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.GaussianBlur(kernel_size=5),
+            transforms.GaussianBlur(kernel_size=3),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
             transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
         ]), p=1)
@@ -284,7 +284,8 @@ class DischmaSet_classification():
         if self.mode == 'train':  # only do augmentation in training
             tf1 = self.train_augmentation(image)
         else:
-            tf1 = self.val_test_augmentation(image)
+            tf1 = image
+            # tf1 = self.val_test_augmentation(image)
         """
         # test plots:
         plt.imshow(np.transpose(image.numpy(), (1,2,0)))
