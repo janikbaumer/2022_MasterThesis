@@ -595,7 +595,7 @@ elif WEIGHTED == 'Auto':  # TODO: check if works (with new dataset class)
 
 if MODEL_TYPE == 'resnet':
     # should work
-    model = models.resnet18(pretrained=True)
+    model = models.resnet50(pretrained=True)
     n_features = model.fc.in_features  # adapt fully connected layer
     model.fc = nn.Linear(n_features, N_CLASSES)  # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
