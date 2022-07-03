@@ -55,9 +55,37 @@ def get_balance(dset):
         lst.append(dset[ele][1])
 """
 
-def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
+def getmetrics_matchPrec(ytrue, yprob_pos):
     prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
     F1s_vec =  (1 + BETA**2)* (prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
+    best_ind = find_nearest(array=prec_vec, value=PRECISION_BASELINE)
+    opt_f1 = F1s_vec[best_ind]  # optimal f1-score
+    opt_prec, opt_rec = prec_vec[best_ind], rec_vec[best_ind]
+    opt_thresh = th_vec[best_ind]
+
+    return opt_prec, opt_rec, opt_f1, opt_thresh  # all scalar values
+
+def getmetrics_matchRec(ytrue, yprob_pos):
+    prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
+    F1s_vec =  (1 + BETA**2)* (prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
+    best_ind = find_nearest(array=prec_vec, value=RECALL_BASELINE)
+    opt_f1 = F1s_vec[best_ind]  # optimal f1-score
+    opt_prec, opt_rec = prec_vec[best_ind], rec_vec[best_ind]
+    opt_thresh = th_vec[best_ind]
+
+    return opt_prec, opt_rec, opt_f1, opt_thresh  # all scalar values
+
+def find_nearest(array, value):
+    """
+    return index of that val in the %array that is closest to %value
+    """
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
+
+def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
+    prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
+    F1s_vec =  (1 + BETA**2)*(prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
     best_ind = np.argmax(F1s_vec) 
     opt_f1 = F1s_vec[best_ind]  # optimal f1-score
     opt_prec, opt_rec = prec_vec[best_ind], rec_vec[best_ind]
@@ -65,7 +93,7 @@ def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
     table = wandb.Table(data=[[x, y] for (x, y) in zip(prec_vec, rec_vec)], columns = ["Precision", "Recall"])
     # table = wandb.Table(data=[[x, y] for (x, y) in zip(precs[::len(precs)//9800], recs[::len(recs)//9800])], columns = ["Precision", "Recall"]) 
 
-    return opt_prec, opt_rec, opt_f1, opt_thresh, table
+    return opt_prec, opt_rec, opt_f1, opt_thresh, table  # all scalar values (except for table)
 
 def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, ypred_th_optimal=None):
     """
@@ -102,12 +130,19 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             # also log p-r-curve
             # also log optimal metrics
             # also get optimal threshold
-            
+
             # get optimal metrics
             opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+            prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+            prec_MatchRec, rec_MatchRec, f1_MatchRec, thresh_MatchRec = getmetrics_matchRec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
 
             global OPTIMAL_THRESHOLD  # where best f1-score is achieved
             OPTIMAL_THRESHOLD = opt_thresh  # after last loop, this variable can be taken for test set threshold (as other fct-call, make variable global), is used is test-function
+            # not sure if needed...ev compute metrics pr-curve afterwards in test set - then compute prec/rec while matching the respective baseline
+            global THRESHOLD_MATCHPREC
+            THRESHOLD_MATCHPREC = thresh_MatchPrec
+            global THRESHOLD_MATCHREC
+            THRESHOLD_MATCHREC = thresh_MatchRec
 
             wandb.log({
             'n_epoch' : ep,
@@ -124,16 +159,50 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             f'{ph}/threshold_optimal/precision' : opt_prec,
             f'{ph}/threshold_optimal/recall' : opt_rec,
             f'{ph}/threshold_optimal/f1-score' : opt_f1,
-            
-            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh
+            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh,
+
+            f'{ph}/threshold_MatchPrec/precision' : prec_MatchPrec,
+            f'{ph}/threshold_MatchPrec/recall' : rec_MatchPrec,
+            f'{ph}/threshold_MatchPrec/f1-score' : f1_MatchPrec,
+            f'{ph}/threshold_MatchPrec/threshold_opt' : thresh_MatchPrec,
+
+            f'{ph}/threshold_MatchRec/precision' : prec_MatchRec,
+            f'{ph}/threshold_MatchRec/recall' : rec_MatchRec,
+            f'{ph}/threshold_MatchRec/f1-score' : f1_MatchRec,
+            f'{ph}/threshold_MatchRec/threshold_opt' : thresh_MatchRec,
+
             })
 
         if ph == 'test':
             # get optimal metrics
+
+            # get predictions with optimal threshold:
+            # opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+            # TODO TODO TODO !!! ev get th for  optimal f1 score from test set, not get optimal th from last validation loop !
+            # (then use variables above, not acc_optimal/prec_optimal/rec_optimal/f1_optimal)
+
+            # get predictions with th matchPrecision:
+            prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+
+            # get predictions with th matchRecall:
+            prec_MatchRec, rec_MatchRec, f1_MatchRec, thresh_MatchRec = getmetrics_matchRec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+            
+            # if th_opt is got from last validation loop
+            th_opt = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
+            pred_binary_th_optimal = (yprobab_pos > th_opt).float().cpu().tolist()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
+
+
+            # how it used to be (for meeting end of june)
+            """
             acc_optimal = accuracy_score(y_true=yt, y_pred=ypred_th_optimal)
             prec_optimal = precision_score(y_true=yt, y_pred=ypred_th_optimal)
             rec_optimal = recall_score(y_true=yt, y_pred=ypred_th_optimal)
             f1_optimal = f1_score(y_true=yt, y_pred=ypred_th_optimal)
+            """
+            acc_optimal = accuracy_score(y_true=yt, y_pred=pred_binary_th_optimal)
+            prec_optimal = precision_score(y_true=yt, y_pred=pred_binary_th_optimal)
+            rec_optimal = recall_score(y_true=yt, y_pred=pred_binary_th_optimal)
+            f1_optimal = f1_score(y_true=yt, y_pred=pred_binary_th_optimal)
 
             #opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
 
@@ -153,8 +222,18 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             f'{ph}/threshold_optimal/precision' : prec_optimal,
             f'{ph}/threshold_optimal/recall' : rec_optimal,
             f'{ph}/threshold_optimal/f1-score' : f1_optimal,
-            
-            f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD
+            f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD,
+
+            f'{ph}/threshold_MatchPrec/precision' : prec_MatchPrec,
+            f'{ph}/threshold_MatchPrec/recall' : rec_MatchPrec,
+            f'{ph}/threshold_MatchPrec/f1-score' : f1_MatchPrec,
+            f'{ph}/threshold_MatchPrec/threshold_opt' : thresh_MatchPrec,
+
+            f'{ph}/threshold_MatchRec/precision' : prec_MatchRec,
+            f'{ph}/threshold_MatchRec/recall' : rec_MatchRec,
+            f'{ph}/threshold_MatchRec/f1-score' : f1_MatchRec,
+            f'{ph}/threshold_MatchRec/threshold_opt' : thresh_MatchRec,
+
             })
 
         print('logging complete.')
@@ -522,6 +601,10 @@ PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epoc
 LOG_EVERY = 200
 LOAD_MODEL = False
 
+BASELINES = {}
+
+PRECISION_BASELINE = 0.7
+RECALL_BASELINE = 0.8
 
 ############ DATASETS AND DATALOADERS ############
 
