@@ -532,10 +532,24 @@ PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epoc
 LOG_EVERY = 200
 LOAD_MODEL = False
 
-BASELINES = {}
-
-PRECISION_BASELINE = 0.7
-RECALL_BASELINE = 0.8
+BASELINES = {
+    "['Buelenberg_1']" : {'PRECISION': 0.52, 'RECALL': 0.913},
+    "['Buelenberg_2']":{'PRECISION': 0.472, 'RECALL': 0.862},
+    "['Giementaelli_1']":{'PRECISION': 0.500, 'RECALL': 0.653},
+    "['Giementaelli_2']":{'PRECISION': 0.299, 'RECALL': 0.442},
+    "['Giementaelli_3']":{'PRECISION': 0.444, 'RECALL': 0.453},
+    "['Luksch_1']":{'PRECISION': 0.31, 'RECALL': 0.926},
+    "['Luksch_2']":{'PRECISION': 0.481, 'RECALL': 0.633},
+    "['Sattel_1']":{'PRECISION': 0.328, 'RECALL': 0.955},
+    "['Sattel_2']":{'PRECISION': 0.267, 'RECALL': 0.917},
+    "['Sattel_3']":{'PRECISION': 0.253, 'RECALL': 0.952},
+    "['Stillberg_1']":{'PRECISION': 0.428, 'RECALL': 0.812},
+    "['Stillberg_2']":{'PRECISION': 0.44, 'RECALL': 0.827},
+    "['Stillberg_3']":{'PRECISION': 0.393, 'RECALL': 0.932},
+    "['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']" : {'PRECISION': 0.398, 'RECALL': 0.83}
+}
+PRECISION_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['PRECISION']
+RECALL_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['RECALL']
 
 ############ DATASETS AND DATALOADERS ############
 
