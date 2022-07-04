@@ -17,7 +17,7 @@ from PIL import Image
 from time import time
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
-
+print('imports done')
 
 ############ REPRODUCIBILITY ############
 
@@ -144,27 +144,14 @@ class DischmaSet_segmentation():
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
 
-        # get lists with paths from composite images and corrsponding labels
-        self.compositeimage_path_list = []
-        self.label_path_list = []
-        for camstation in stat_cam_lst:
-            STATION, CAM = camstation.split('_')
-            print(STATION, CAM)
+        self.DAYS_TRAIN = [str(ele).zfill(2) for ele in list(range(1, 24+1))]  # days 1 to 24 for training, residual days for validation
+        self.DAYS_TEST = ['03', '10', '17', '25']
 
-            self.PATH_COMP_IMG = os.path.join(self.root, f'Composites/Cam{CAM}_{STATION}')
-            self.file_list_camstat_imgs = sorted([f for f in os.listdir(self.PATH_COMP_IMG) if (f.endswith('.png') or f.endswith('.jpg')) and isfile(os.path.join(self.PATH_COMP_IMG, f))]) 
-            for file in self.file_list_camstat_imgs:
-                self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
-
-            self.PATH_LABELS = os.path.join(self.root, f'final_workdir_{STATION}_Cam{CAM}')
-            self.file_list_camstat_lbl = sorted([f for f in os.listdir(self.PATH_LABELS) if f.endswith('.tif') and isfile(os.path.join(self.PATH_LABELS, f))])
-            for file in self.file_list_camstat_lbl:
-                self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
-        self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
+        self.YEAR_TRAIN_VAL = '2021'
+        self.YEAR_TEST = '2020'
 
         # data augmentation
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
             ###self.normalize,
             # transforms.RandomCrop(size=(int(0.8*self.patch_size[0]), int(0.8*self.patch_size[1]))),  # already cropped when choosing patches
@@ -173,8 +160,50 @@ class DischmaSet_segmentation():
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
             ###transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
             ]), p=0.5)
-        
         self.coljit = transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)
+
+
+        # get lists with paths from composite images and corrsponding labels
+        self.compositeimage_path_list = []
+        self.label_path_list = []
+        for camstation in stat_cam_lst:
+            STATION, CAM = camstation.split('_')
+            # print(STATION, CAM)
+
+            self.PATH_COMP_IMG = os.path.join(self.root, f'Composites/Cam{CAM}_{STATION}')
+            self.file_list_camstat_imgs = sorted([f for f in os.listdir(self.PATH_COMP_IMG) if (f.endswith('.png') or f.endswith('.jpg')) and isfile(os.path.join(self.PATH_COMP_IMG, f))]) 
+            for file in self.file_list_camstat_imgs:
+                yr = file[6:10]
+                day = file[12:14]
+                if mode == 'train':
+                    if day in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
+                        self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
+                elif mode == 'val':
+                    if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
+                        self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
+                elif mode == 'test':
+                    if day in self.DAYS_TEST and yr in self.YEAR_TEST:
+                        self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
+
+            self.PATH_LABELS = os.path.join(self.root, f'final_workdir_{STATION}_Cam{CAM}')
+            self.file_list_camstat_lbl = sorted([f for f in os.listdir(self.PATH_LABELS) if f.endswith('.tif') and isfile(os.path.join(self.PATH_LABELS, f))])
+            for file in self.file_list_camstat_lbl:
+                yr = file[6:10]
+                day = file[12:14]
+                if mode == 'train':
+                    if day in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
+                        self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
+                elif mode == 'val':
+                    if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
+                        self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
+                elif mode == 'test':
+                    if day in self.DAYS_TEST and yr in self.YEAR_TEST:
+                        self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
+
+        self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
+
+        # TODO: make sure to all days in compositeimage_path_list, resp. label_path_list a coresponding baseline exists !!!
+        # TODO: create new lists depending on phase (train/val/test) - DONE
 
 
     def __len__(self):
@@ -215,10 +244,10 @@ class DischmaSet_segmentation():
 
         """
         # test plots:
-        plt.imshow(np.transpose(img.cpu().numpy(), (1,2,0)))
-        plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)))
+        plt.imshow(np.transpose(img.cpu().numpy(), (1,2,0)).squeeze())
+        plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)).squeeze())
         """
-
+        # plt.imsave()
         '''
         # plot images and labels
         plt.figure()
@@ -229,7 +258,7 @@ class DischmaSet_segmentation():
         axarr[1].imshow(np.transpose(l.cpu().numpy(), (1,2,0)))
         '''
 
-        return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1
+        return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
 
 
 if __name__=='__main__':
@@ -237,8 +266,8 @@ if __name__=='__main__':
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
-    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=all)
+    x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'])
     #for n in range(30, 100):
     #    img, lbl = x.__getitem__(n)
     img, lbl = x.__getitem__(70)
-
+    print()
