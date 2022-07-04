@@ -243,9 +243,9 @@ dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
 
 # Note:
-#   class 0: no snow
+#   class 0: no data
 #   class 1: snow
-#   class 2/3: no data
+#   class 2/3: no snow
 
 # TODO get balancedness of dset / ev consider weighting of classes (only of training data !)
 
