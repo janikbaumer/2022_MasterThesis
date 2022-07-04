@@ -68,7 +68,7 @@ def getmetrics_matchPrec(ytrue, yprob_pos):
 def getmetrics_matchRec(ytrue, yprob_pos):
     prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
     F1s_vec =  (1 + BETA**2)* (prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
-    best_ind = find_nearest(array=prec_vec, value=RECALL_BASELINE)
+    best_ind = find_nearest(array=rec_vec, value=RECALL_BASELINE)
     opt_f1 = F1s_vec[best_ind]  # optimal f1-score
     opt_prec, opt_rec = prec_vec[best_ind], rec_vec[best_ind]
     opt_thresh = th_vec[best_ind]
