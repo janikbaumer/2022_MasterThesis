@@ -68,6 +68,9 @@ def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
 
     print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
+def test_model(model):
+    pass
+
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
 
@@ -81,15 +84,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
         for phase in ['train', 'val']:  # in each epoch, do training and validation
             print(f'{phase} phase in epoch {epoch+1}/{num_epochs} starting...')
 
-            # train_it_counter, val_it_counter = 0, 0
-            running_loss = 0
-
-            y_true_total = []
-            y_pred_binary_total = []
-
-            y_true_total = torch.Tensor().to(device)
-            y_pred_binary_total = torch.Tensor().to(device)
-
             if phase == 'train':
                 model.train()
                 dloader = dloader_train
@@ -98,11 +92,26 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 model.eval()
                 dloader = dloader_val
 
+            # train_it_counter, val_it_counter = 0, 0
+            running_loss = 0  # loss (to be updated during batch iteration)
+
+            y_true_total = []
+            y_pred_binary_total = []
+            y_pred_logits_total = None
+
+            y_true_total = torch.Tensor().to(device)  # initialize as empty tensor
+            y_pred_binary_total = torch.Tensor().to(device)  # initialize as empty tensor
+
+
             for x, y in tqdm(dloader):
                 batch_iteration[phase] += 1
 
-                print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
-                
+                # print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
+
+                # move to GPU
+                x = x.to(device)
+                y = y.to(device)
+
                 """
                 if batch_iteration[phase] < 200 and batch_iteration[phase]%10 == 0:
                     print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
@@ -233,14 +242,27 @@ LOG_EVERY = 50
 ############ DATASETS AND DATALOADERS ############
 
 # create datasets and dataloaders, split in train and validation set
-dset_full = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode=None)
-dset_train, dset_val = random_split(dset_full, (int(len(dset_full)*TRAIN_SPLIT), math.ceil(len(dset_full)*(1-TRAIN_SPLIT))))
-print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
+dset_train = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
+dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+dset_test = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
 
-len_dset_train, len_dset_val = len(dset_train), len(dset_val)
+# dset_full = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode=None)
+# dset_train, dset_val = random_split(dset_full, (int(len(dset_full)*TRAIN_SPLIT), math.ceil(len(dset_full)*(1-TRAIN_SPLIT))))
+# print(f'Dischma sets (train and val) with data from {STATIONS_CAM_LST} created.')
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
+dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)
+
+print('lengths (train, val, test dloader): ', len(dloader_train), len(dloader_val), len(dloader_test))
+
+# balancedness: not done, as every image in label_path_list would have to be loaded and respective labels collected - takes much time and memory
+"""
+print('distribution of labels: ')
+print(f'for train set: {dset_train.get_balancedness()}')
+print(f'for val set: {dset_val.get_balancedness()}')
+print(f'for test set: {dset_test.get_balancedness()}')
+"""
 
 # Note:
 #   class 0: no data
@@ -278,3 +300,5 @@ elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
+
+test_model(model=model)
