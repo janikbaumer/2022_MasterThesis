@@ -34,7 +34,7 @@ def get_indices_or_None(path, raw_img):
 
 def get_manual_label_or_None(path_to_file, file):
     """
-    get the label from the text file with the manual classifications (from script handlabelling.py)
+    get the label from the text file with the manual classifications (from script handlabelling_raw.py)
     """
     full_path_manual_labels = os.path.join(path_to_file, 'manual_labels_isfoggy.txt')
     if not os.path.isfile(full_path_manual_labels):
@@ -169,7 +169,7 @@ class DischmaSet_classification():
                             self.is_foggy.append(int(img_is_foggy))
                             self.path_list_valid.append(full_path_img)
                     else:
-                        print('manual labels do not exist, make sure to label them first (create file manual_labels_isfoggy.txt (with script handlabelling.py!')
+                        print('manual labels do not exist, make sure to label them first (create file manual_labels_isfoggy.txt (with script handlabelling_raw.py!')
                         break
 
                 if self.mode == 'full_v2' and raw_img_name[0:4] == self.YEAR_MANUAL and raw_img_name[4:6] in self.MONTHS_MANUAL:
