@@ -111,7 +111,7 @@ def data_augmentation(tensor_img_lbl, augm_pipeline, norm, coljit):
     # lbl = norm(lbl)
     # lbl = coljit(lbl)  #
 
-    return img.float(), lbl.long()  #augmented_imglbl
+    return img.to(torch.float64), lbl.long()  # augmented_imglbl
 
 """
 nbr = 0
@@ -139,7 +139,7 @@ class DischmaSet_segmentation():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
-        self.patch_size = (256*8, 256*8)
+        self.patch_size = (256*2, 256*2)  # (256*8, 256*8)
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
@@ -231,8 +231,8 @@ class DischmaSet_segmentation():
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
 
-        i = torch.Tensor(img_patch).to(self.device)  # if errors, change to torch.as_tensor()
-        l = torch.Tensor(lbl_patch).to(self.device)
+        i = torch.as_tensor(img_patch).to(self.device)  # if errors, change to torch.as_tensor()
+        l = torch.as_tensor(lbl_patch).to(self.device)
 
 
         # cat img and lbl tensors together, apply train augmentation, the split again to img, lbl
@@ -257,9 +257,12 @@ class DischmaSet_segmentation():
         axarr[1].set_title(f'Label Patch {self.patch_size}')
         axarr[1].imshow(np.transpose(l.cpu().numpy(), (1,2,0)))
         '''
+        # assert(i.isnan().any() == False)
 
         return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
 
+    def get_balancedness():
+        pass
 
 if __name__=='__main__':
 
