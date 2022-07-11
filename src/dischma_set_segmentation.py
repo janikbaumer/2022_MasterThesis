@@ -16,6 +16,8 @@ from os.path import isfile, join
 from PIL import Image
 from time import time
 
+from dischma_set_classification import get_manual_label_or_None
+
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 print('imports done')
 
@@ -101,6 +103,17 @@ def ensure_same_days(imgs_paths, labels_paths):
 
     return imgs_path_new, labels_path_new
 
+def get_nonfoggy(lst, path):
+    nonfoggy = []
+    for ele in lst:
+        img = ele.split('/')[-1]
+        img_is_foggy = get_manual_label_or_None(path_to_file=path, file=img)
+        if img_is_foggy == 0:
+            nonfoggy.append(ele)
+
+    return nonfoggy
+    # append non foggy images to list
+
 def data_augmentation(tensor_img_lbl, augm_pipeline, norm, coljit):
     imglbl = augm_pipeline(tensor_img_lbl)  # together to have same random seed
     img = imglbl[0:3, ...]
@@ -184,6 +197,9 @@ class DischmaSet_segmentation():
                 elif mode == 'test':
                     if day in self.DAYS_TEST and yr in self.YEAR_TEST:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
+
+            # remove foggy images
+            self.compositeimage_path_list = get_nonfoggy(lst=self.compositeimage_path_list, path=self.PATH_COMP_IMG)
 
             self.PATH_LABELS = os.path.join(self.root, f'final_workdir_{STATION}_Cam{CAM}')
             self.file_list_camstat_lbl = sorted([f for f in os.listdir(self.PATH_LABELS) if f.endswith('.tif') and isfile(os.path.join(self.PATH_LABELS, f))])
