@@ -76,11 +76,11 @@ def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
 
     print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
 
-"""
+
 def test_model(model):
     # with trained model, predict class for every x,y in test set
     # log the respective metrics (only one value per metric)
-    # TODO: plot the incorrect classifications
+    # TODO: plot the incorrect segmentations
 
     time_start = time()
     epoch = 0
@@ -94,18 +94,6 @@ def test_model(model):
 
     running_loss = 0  # loss (to be updated during batch iteration)
     
-    '''
-    y_true_total = []
-    y_pred_probab_total = None
-    y_pred_logits_total = None
-    y_pred_binary_total_th_std = []
-    y_pred_binary_total_th_optimal = []
-    '''
-
-    y_true_total = []
-    y_pred_binary_total = []
-    y_pred_logits_total = None
-
     y_true_total = torch.Tensor().to(device)  # initialize as empty tensor
     y_pred_binary_total = torch.Tensor().to(device)  # initialize as empty tensor
 
@@ -115,35 +103,40 @@ def test_model(model):
         # move to GPU
         x = x.to(device)
         y = y.to(device)
+        y = y.squeeze()
 
         with torch.set_grad_enabled(phase == 'train'):
-            pred_logits = model(x)  # predictions (logits) (for class 0 and 1) / shape: batchsize, nclasses (8,2)
-            loss = criterion(pred_logits, y)
-            
-            yprobab = torch.softmax(pred_logits, dim=1)  # [log_every*batchsize, 2] probas between 0 and 1, sum up to one
-            #yprobab_neg = yprobab[:, 0]
-            yprobab_pos = yprobab[:, 1]  # compute metrics for class one            
-            
-            threshold = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
+            y_pred_logits = model(x)  # torch.Size([BS, n_classes, H, W]), e.g. [8, 3, 256, 256]  # logits, not probabilty !
+            # y_pred_logits.shape: [BS, n_classes, H, W]
+            # y.shape: [BS, H, W], contains values 0, 1, or 2 (vals in range n_classes)
 
-            pred_binary_th_std = yprobab.argmax(dim=1)  # threshold 0.5 # either 0 or 1 / shape: batchsize (8) / takes higher probablity (from the two classes) to compare to y (y_true)
-            pred_binary_th_optimal = (yprobab_pos > threshold).float()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
+            loss = criterion(y_pred_logits, y)  # note: masking no data values is implicitly applied by setting weight for class 0 (no_data) to zero
+
+            # if loss or x or y contain nan elements, breakpoint
+
+            if phase == 'train':
+                loss.backward()  # backprop
+                optimizer.step()  # update params
+
+            # for metrics, get only argmax of cols 1 and 2, ignore col 0 (with logits for no data)
+            y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for 0th class (no data) -> consider logits for class 1 and 2 (3)
+            y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
 
 
+        # STATS
+        y_true_flat = y.flatten()  # contains 0, 1, 2
+        # ev todo: log logits as well (not only predictions)
+        # y_pred_flat_logits = y_pred_logits_data.view(BATCH_SIZE,2,-1)  # shape [BATCHSIZE, 2, 256x256], not completely flat
+        y_pred_flat_binary = y_pred_binary_data.flatten()  # contains 0, 1
 
-        # stats
-        y_true = y.cpu().tolist()
-        y_pred_binary_th_std = pred_binary_th_std.cpu().tolist()
-        y_pred_binary_th_optimal = pred_binary_th_optimal.cpu().tolist()
+        # for metrics, only consider predictions of pixels that are not no_data
+        y_true_data = y_true_flat[y_true_flat != 0]  # contains 1, 2
+        y_true_data[y_true_data==1] = 0  # convert ones to zeros
+        y_true_data[y_true_data==2] = 1  # convert twos to ones     # now contains 0 (snow), 1 (no_snow)
+        y_pred_data = y_pred_flat_binary[y_true_flat != 0]  # contains 0, 1
 
-        y_true_total.extend(y_true)
-        y_pred_binary_total_th_std.extend(y_pred_binary_th_std)
-        y_pred_binary_total_th_optimal.extend(y_pred_binary_th_optimal)
-
-        if batch_iteration[phase] % len(dloader) != 1:
-            y_pred_logits_total = torch.cat((y_pred_logits_total, pred_logits))
-        else:
-            y_pred_logits_total = pred_logits
+        y_true_total = torch.cat((y_true_total, y_true_data), 0)  # append to flattened torch tensor 
+        y_pred_binary_total = torch.cat((y_pred_binary_total, y_pred_data), 0)
 
         # losses
         batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
@@ -152,15 +145,16 @@ def test_model(model):
 
         if batch_iteration[phase]%len(dloader) == 0:  # after having seen the whole test set, do logging
             loss = running_loss/len(dloader)
-            print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
+            print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole test dataloader): {loss}')
 
             # TODO adapt function, log with std and optimal threshold
-            get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total_th_std, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase], ypred_th_optimal=y_pred_binary_total_th_optimal)
+            get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+
 
     time_end = time()
     time_elapsed = time_end - time_start
     print(f'testing (on {device}) completed in {time_elapsed} seconds.')
-"""
+
 
 def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
     time_start = time()
@@ -214,7 +208,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                 # target only have one channels (containing the class indices) -> must be removed for loss function (if BCE loss)
                 # # https://discuss.pytorch.org/t/only-batches-of-spatial-targets-supported-non-empty-3d-tensors-but-got-targets-of-size-1-1-256-256/49134
-                y = y.squeeze()
+                y = y.squeeze(1)
 
                 optimizer.zero_grad()
 
@@ -345,7 +339,7 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 
 N_CLASSES = 3
 PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}'
-LOG_EVERY = 200
+LOG_EVERY = 20
 
 
 ############ DATASETS AND DATALOADERS ############
@@ -421,4 +415,4 @@ elif LR_SCHEDULER == 'None':
 
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
 
-# test_model(model=model)
+test_model(model=model)
