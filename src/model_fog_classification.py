@@ -263,7 +263,7 @@ def print_grid(x, y, batchsize, bi):
 
 def test_model(model):
     # with trained model, predict class for every x,y in test set
-    # log the respective metrics (only one per metric)
+    # log the respective metrics (only one value per metric)
     # plot the incorrect classifications
 
     time_start = time()
