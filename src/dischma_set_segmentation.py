@@ -152,7 +152,7 @@ class DischmaSet_segmentation():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
-        self.patch_size = (256*2, 256*2)  # (256*8, 256*8)
+        self.patch_size = (256, 256)  # (256*8, 256*8)
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
@@ -220,6 +220,7 @@ class DischmaSet_segmentation():
 
         # TODO: make sure to all days in compositeimage_path_list, resp. label_path_list a coresponding baseline exists !!!
         # TODO: create new lists depending on phase (train/val/test) - DONE
+        # DONE: make sure composites are not foggy
 
 
     def __len__(self):

@@ -1,5 +1,4 @@
 import torch
-torch.cuda.empty_cache()
 import torchvision
 import argparse
 import matplotlib.pyplot as plt
@@ -187,25 +186,26 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             # train_it_counter, val_it_counter = 0, 0
             running_loss = 0  # loss (to be updated during batch iteration)
 
-            y_true_total = []
-            y_pred_binary_total = []
-            y_pred_logits_total = None
+            #y_true_total = []
+            #y_pred_binary_total = []
+            #y_pred_logits_total = None
 
             y_true_total = torch.Tensor().to(device)  # initialize as empty tensor
             y_pred_binary_total = torch.Tensor().to(device)  # initialize as empty tensor
 
 
             for x, y in tqdm(dloader):
-                if np.unique(y.cpu()).shape == (1,) and np.unique(y.cpu())[0] == 0:  # resolves issue that arises when there are only 0 (no_data) in the y tensor
+                # skip this iteration if only 0 (no_data) in the y tensor
+                if np.unique(y.cpu()).shape == (1,) and np.unique(y.cpu())[0] == 0:
                     continue
 
                 batch_iteration[phase] += 1
-
+                
                 # print_grid(x,y, BATCH_SIZE, batch_iteration[phase])
 
-                # move to GPU
-                x = x.to(device)
-                y = y.to(device)
+                # move to GPU, already done in getitem function of dataset class
+                # x = x.to(device)
+                # y = y.to(device)
 
                 """
                 if batch_iteration[phase] < 200 and batch_iteration[phase]%10 == 0:
@@ -232,8 +232,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss.backward()  # backprop
                         optimizer.step()  # update params
 
-                    # for metrics, get only argmax of first two cols (0 and 1), ignore 2nd col (with logits for no data)
-                    y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for first class (no data) -> consider logits for class 1 and 2 (3)
+                    # for metrics, get only argmax of cols 1 and 2, ignore col 0 (with logits for no data)
+                    y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for 0th class (no data) -> consider logits for class 1 and 2 (3)
                     y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
 
                 # STATS
@@ -244,8 +244,8 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
                 # for metrics, only consider predictions of pixels that are not no_data
                 y_true_data = y_true_flat[y_true_flat != 0]  # contains 1, 2
-                y_true_data[y_true_data==1] = 0
-                y_true_data[y_true_data==2] = 1  # now contains 0 (snow), 1 (no_snow)
+                y_true_data[y_true_data==1] = 0  # convert ones to zeros
+                y_true_data[y_true_data==2] = 1  # convert twos to ones     # now contains 0 (snow), 1 (no_snow)
                 y_pred_data = y_pred_flat_binary[y_true_flat != 0]  # contains 0, 1
 
                 y_true_total = torch.cat((y_true_total, y_true_data), 0)  # append to flattened torch tensor 
@@ -274,7 +274,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     scheduler.step()
                     # scheduler.print_lr()
 
-        print()  # end of epoch e
+        print()  # end of epoch
     
     time_end = time()
     time_elapsed = time_end - time_start
@@ -332,12 +332,12 @@ BATCH_SIZE = args.batch_size
 LEARNING_RATE = args.lr
 EPOCHS = args.epochs
 TRAIN_SPLIT = args.train_split
-# WEIGHTED = args.weighted
 PATH_DATASET = args.path_dset
 LR_SCHEDULER = args.lr_scheduler
 OPTIM = args.optim
 WEIGHT_DECAY = args.weight_decay
 MOMENTUM = args.momentum
+# WEIGHTED = args.weighted
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
@@ -345,7 +345,7 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 
 N_CLASSES = 3
 PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}'
-LOG_EVERY = 20
+LOG_EVERY = 200
 
 
 ############ DATASETS AND DATALOADERS ############
@@ -365,7 +365,7 @@ dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)
 
 print('lengths (train, val, test dloader): ', len(dloader_train), len(dloader_val), len(dloader_test))
 
-# balancedness: not done, as every image in label_path_list would have to be loaded and respective labels collected - takes much time and memory
+# balancedness: not done, as every image in label_path_list would have to be loaded and respective labels collected - takes (too) much time and memory
 """
 print('distribution of labels: ')
 print(f'for train set: {dset_train.get_balancedness()}')
@@ -415,7 +415,7 @@ elif OPTIM == 'Adam':
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)  # weight_decay: It is used for adding the l2 penality to the loss (default = 0)
 
 if LR_SCHEDULER != 'None':
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.8)  # Decay LR by a factor of 0.1 every 'step_size' epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.8)  # Decay LR by a factor of gamma every 'step_size' epochs
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
