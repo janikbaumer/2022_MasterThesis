@@ -265,7 +265,8 @@ class DischmaSet_segmentation():
         plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)).squeeze())
         """
         # plt.imsave()
-        '''
+        
+        """
         # plot images and labels
         plt.figure()
         f, axarr = plt.subplots(2, 1) #subplots(r,c) provide the no. of rows and columns
@@ -273,7 +274,9 @@ class DischmaSet_segmentation():
         axarr[0].imshow(np.transpose(i.cpu().numpy(), (1,2,0)))
         axarr[1].set_title(f'Label Patch {self.patch_size}')
         axarr[1].imshow(np.transpose(l.cpu().numpy(), (1,2,0)))
-        '''
+        plt.show()
+        """
+        
         # assert(i.isnan().any() == False)
 
         return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
@@ -289,5 +292,9 @@ if __name__=='__main__':
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'])
     #for n in range(30, 100):
     #    img, lbl = x.__getitem__(n)
-    img, lbl = x.__getitem__(70)
+    img, lbl = x.__getitem__(90)
+    #plt.imshow(np.transpose(img.cpu().numpy(), (1,2,0)).squeeze())
+    #plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)).squeeze())
+
     print()
+

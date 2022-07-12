@@ -16,11 +16,7 @@ print("Imports successful")
 
 image.LOAD_TRUNCATED_IMAGES = True
 model = VGG16(weights='imagenet', include_top=False)
-#model = VGG16(include_top=True, weights="imagenet", classes=1000)
 
-# Variables
-###imdir = './input/'
-###targetdir = "./output/"
 STATION = 'Buelenberg'
 CAM = '1'
 STATCAM_LST = [
@@ -49,12 +45,11 @@ for statcam in STATCAM_LST:
 
     number_clusters = 5  # user specified
 
-    #%% II
+#%% II
 
     # Loop over files and get features
     
-    # filelist = glob.glob(os.path.join(imdir, '*.jpg'))
-    filelist = glob.glob(os.path.join(imdir, '*.png'))
+    filelist = glob.glob(os.path.join(imdir, '*.png'))  # ev replace with .jpg
     filelist.sort()
     featurelist = []
     for i, imagepath in enumerate(filelist):
@@ -66,7 +61,7 @@ for statcam in STATCAM_LST:
         features = np.array(model.predict(img_data))
         featurelist.append(features.flatten())
 
-    #%% III
+#%% III
 
     # Clustering
     kmeans = KMeans(n_clusters = number_clusters, random_state=0).fit(np.array(featurelist))
@@ -81,7 +76,6 @@ for statcam in STATCAM_LST:
     print("\n")
     for i, m in enumerate(kmeans.labels_):
         print("    Copy: %s / %s" %(i, len(kmeans.labels_)), end="\r")
-        ###shutil.copy(filelist[i], targetdir + str(m) + "_" + str(filelist[i])[8:])
         path = filelist[i].rsplit('/', 1)[0]
         filename = filelist[i].rsplit('/', 1)[1]
         shutil.copy(src=f'{path}/{filename}', dst=f'{targetdir}/cluster_{str(m)}_{filename}')  # [-18:] to get filename e.g. 20190628053001.png

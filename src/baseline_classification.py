@@ -1,28 +1,17 @@
 # jbaumer
 # calculate metrics for different datasets (1x/cam + 1 for all cams)
 
-from re import T
 import torch
-import torchvision
 import argparse
-import matplotlib.pyplot as plt
 import os
 import wandb
 import ast
 import random
-
 import numpy as np
-from time import time
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, recall_score, precision_score, precision_recall_curve
-
-from torch.utils.data import DataLoader, random_split
-from torch import nn
-from torchvision import models
-from torch.optim import lr_scheduler
-from tqdm import tqdm
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 from dischma_set_classification import DischmaSet_classification
-
 print('imports done')
+
 
 ############ REPRODUCIBILITY ############
 
@@ -44,10 +33,10 @@ os.environ['PYTHONHASHSEED'] = str(random_seed)
 parser = argparse.ArgumentParser(description='get baseline for classification task')
 parser.add_argument('--stations_cam', help='list of stations with camera number, separated with underscore (e.g. Buelenberg_1')
 parser.add_argument('--path_dset', help='path to used dataset ')
-
 args = parser.parse_args()
 
 # wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
+
 
 ############ GLOBAL VARIABLES ############
 
@@ -70,7 +59,7 @@ prec = precision_score(y_GT, y_pred_baseline)
 rec = recall_score(y_GT, y_pred_baseline)
 f1 = f1_score(y_GT, y_pred_baseline)
 
-print('from cam: ', STATIONS_CAM_LST)
+print('baseline classificaton metrics from cam(s): ', STATIONS_CAM_LST)
 print('accuracy: ', acc)
 print('precision: ', prec)
 print('recall: ', rec)
