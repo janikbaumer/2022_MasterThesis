@@ -141,6 +141,7 @@ src/wandb
 src/fig_check_manually
 src/fig_check_manually.zip
 src/correctly_placed_labels
+src/label_segment/
 reading_material/
 todel/*
 
