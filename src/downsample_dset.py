@@ -3,7 +3,6 @@ import shutil
 from PIL import Image
 import torchvision
 from torchvision.transforms import functional as F
-from torchvision.utils import save_image
 import torch
 from torchvision.transforms.transforms import ToTensor, ToPILImage
 import torch.nn.functional as F

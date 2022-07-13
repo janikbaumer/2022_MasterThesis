@@ -91,8 +91,8 @@ class DischmaSet_classification():
         # self.MONTHS_VAL = ['01', '04', '07', '10']  # use Jan, April, July, Oct for validation
         # self.MONTHS_TRAIN_VAL = ['01', '04', '07', '10']
 
-        self.YEAR_TEST = '2020'
         self.YEAR_TRAIN_VAL = '2021'
+        self.YEAR_TEST = '2020'
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

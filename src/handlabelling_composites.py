@@ -1,16 +1,17 @@
 # jbaumer@ethz.ch
 # 2022-03-24
 
-# manual classification of images of the Dischma valley (Davos)
+# manual classification of composite images of the Dischma valley (Davos)
 # if done with classification, make sure to end with button 'q' (do not interrupt program with Ctrl+C or similar !)
 # foggy sky -> not foggy
 # as soon as some snow is covered -> foggy
 # too much reflection points on image, when img gets unclear -> foggy
 
-# label images of 2020 / 2021
 # if image is (F)oggy, press button 'f'
 # if image is (N)ot foggy, press button 'n'
 # to quit, press button 'q' (do not only exit with x-symbol on top right)
+
+# label test days from 2020 and all from 2021
 
 import os
 import random
@@ -20,17 +21,13 @@ from tkinter import messagebox
 
 random.seed(42)
 
-"""
-# no more needed (image will not even be shown, by checking 'data' variable)
-def write_to_file(string, textfile):
-    # appends the line only to the textfile if it has not yet been classified before
-    os.system(f"grep -q {string} {textfile} || echo {string} >> {textfile}")
-"""
 
-# get n labeled examples from test set
+# unix shortcuts / hints
+
+# get n labeled examples from test set: e.g.
 # cat manual_labels_isfoggy.txt | grep -e 2020[0-9][0-9]03 -e 2020[0-9][0-9]10 -e 2020[0-9][0-9]17 -e 2020[0-9][0-9]25 | wc -l
 
-# get n images to be labeled (in total)
+# get n images to be labeled (in total): e.g. 
 # ls 2020??03??????.* 2020??10??????.* 2020??17??????.* 2020??25??????.* | wc -l
 
 STATCAM_LST = [
@@ -48,10 +45,6 @@ STATCAM_LST = [
     'Stillberg/2',
     'Stillberg/3'
     ]
-
-# todo. label some more for test set - only 2 days a months are too little, as not all can be used
-# because they also need to be found in txt files from SLF classification for comparison to baseline
-# -> label days 03, 10, 17, 25 from each month in 2020
 
 BASE_PATH = '../datasets/dataset_complete/Composites/'
 CAM = 'Stillberg'  # may be changed
@@ -123,5 +116,4 @@ with open(file=manual_labels_file, mode='a') as txtfile:
         if cont == True:
             continue
 
-# print('everything from years 2021 (months: 01,04,07,10) classified (if not exited with q)')
-print(f'everything from {CAMSTAT_DIR} and year 2020 (days: 03, 10, 17, 25) classified (if not exited with q)')
+print(f'everything from {CAMSTAT_DIR} and year 2020 (days: 03, 10, 17, 25), resp. year 2021 classified (if not exited with q)')

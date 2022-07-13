@@ -20,12 +20,6 @@ from tkinter import messagebox
 
 random.seed(42)
 
-"""
-# no more needed (image will not even be shown, by checking 'data' variable)
-def write_to_file(string, textfile):
-    # appends the line only to the textfile if it has not yet been classified before
-    os.system(f"grep -q {string} {textfile} || echo {string} >> {textfile}")
-"""
 
 # get n labeled examples from test set
 # cat manual_labels_isfoggy.txt | grep -e 2020[0-9][0-9]03 -e 2020[0-9][0-9]10 -e 2020[0-9][0-9]17 -e 2020[0-9][0-9]25 | wc -l

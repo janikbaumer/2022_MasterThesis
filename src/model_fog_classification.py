@@ -25,37 +25,19 @@ print('imports done')
 # NOTES:
     # class 1 = foggy images
     # if using other models, use BS small enogh s.t. it works
-    # assumption: learned features from resnet can also be used for our images (same pixel distribution)
-    # (might be slightly wrong, as we are using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
-    # only take one model that works, do not play around too much
-    # validate/train model - evaluate with only handlabelled data
-
-# multiple TODO s: notes (after meeting):
-    # precision recall curve - if looks strange, ev used metrics needs to be changed (e.g. to optimal F1 score, as it's robust to shifted PR curves (if they are shifted to one side))
-    # check data augmentation manually (horizontal flipping, cropping to eg 80-90%)), ev more
-    # ev also do data augmentation on validation set (then take average, or consider as foggy if at least once foggy)
-    # add precision recall curve to wandb.log
-    # train and validate (with handlabelled data) - get metrics (wandb)
-    # train and validate (with handlabelled data, multiple cams) - get metrics (wandb)
+    # assumption: learned features from resnet (resp. other models) can also be used for our images (same pixel distribution)
+        # (might be slightly wrong, as we are using imgs with more snow/fog than normal (imagenet) - mean and std will be slightly off (not 0, resp 1))
+    # train/validate/test model - evaluations only with handlabelled data
 
 
 ################# FUNCTIONS ######################
 
-"""
-def get_optimal_f1_score():
-    pass
-
-def get_best_threshold():
-    # from vector of predictions, get best threshold
-    pass
-
-def get_balance(dset):
-    lst = []
-    for ele in dset:
-        lst.append(dset[ele][1])
-"""
-
 def getmetrics_matchPrec(ytrue, yprob_pos):
+    """
+    get metrics by choosing the threshold (from pr-curve),
+    so that baseline precision is achieved
+    interesting to see how much recall can be achieved
+    """
     prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
     F1s_vec =  (1 + BETA**2)* (prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
     best_ind = find_nearest(array=prec_vec, value=PRECISION_BASELINE)
@@ -65,7 +47,13 @@ def getmetrics_matchPrec(ytrue, yprob_pos):
 
     return opt_prec, opt_rec, opt_f1, opt_thresh  # all scalar values
 
+
 def getmetrics_matchRec(ytrue, yprob_pos):
+    """
+    get metrics by choosing the threshold (from pr-curve),
+    so that baseline recall is achieved
+    interesting to see how much precision can be achieved
+    """
     prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
     F1s_vec =  (1 + BETA**2)* (prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
     best_ind = find_nearest(array=rec_vec, value=RECALL_BASELINE)
@@ -75,6 +63,7 @@ def getmetrics_matchRec(ytrue, yprob_pos):
 
     return opt_prec, opt_rec, opt_f1, opt_thresh  # all scalar values
 
+
 def find_nearest(array, value):
     """
     return index of that val in the %array that is closest to %value
@@ -83,7 +72,16 @@ def find_nearest(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx
 
+
 def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
+    """
+    get metrics by choosing the threshold (from pr-curve),
+    so that optimal f1-score is achieved
+    interesting to see how much better f1-score can be achieved
+
+    note:
+    for the test metrics, the threshold which yielded the optimal f1-score in the last validation loop is used.
+    """
     prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
     F1s_vec =  (1 + BETA**2)*(prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
     best_ind = np.argmax(F1s_vec) 
@@ -94,6 +92,7 @@ def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
     # table = wandb.Table(data=[[x, y] for (x, y) in zip(precs[::len(precs)//9800], recs[::len(recs)//9800])], columns = ["Precision", "Recall"]) 
 
     return opt_prec, opt_rec, opt_f1, opt_thresh, table  # all scalar values (except for table)
+
 
 def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, ypred_th_optimal=None):
     """
@@ -138,7 +137,6 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
 
             global OPTIMAL_THRESHOLD  # where best f1-score is achieved
             OPTIMAL_THRESHOLD = opt_thresh  # after last loop, this variable can be taken for test set threshold (as other fct-call, make variable global), is used is test-function
-            # not sure if needed...ev compute metrics pr-curve afterwards in test set - then compute prec/rec while matching the respective baseline
             global THRESHOLD_MATCHPREC
             THRESHOLD_MATCHPREC = thresh_MatchPrec
             global THRESHOLD_MATCHREC
@@ -174,12 +172,7 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             })
 
         if ph == 'test':
-            # get optimal metrics
-
-            # get predictions with optimal threshold:
-            # opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
-            # TODO TODO TODO !!! ev get th for  optimal f1 score from test set, not get optimal th from last validation loop !
-            # (then use variables above, not acc_optimal/prec_optimal/rec_optimal/f1_optimal)
+            # for predictions with optimal threshold: using optimal threshold from last validation loop
 
             # get predictions with th matchPrecision:
             prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
@@ -191,20 +184,10 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             th_opt = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
             pred_binary_th_optimal = (yprobab_pos > th_opt).float().cpu().tolist()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
 
-
-            # how it used to be (for meeting end of june)
-            """
-            acc_optimal = accuracy_score(y_true=yt, y_pred=ypred_th_optimal)
-            prec_optimal = precision_score(y_true=yt, y_pred=ypred_th_optimal)
-            rec_optimal = recall_score(y_true=yt, y_pred=ypred_th_optimal)
-            f1_optimal = f1_score(y_true=yt, y_pred=ypred_th_optimal)
-            """
             acc_optimal = accuracy_score(y_true=yt, y_pred=pred_binary_th_optimal)
             prec_optimal = precision_score(y_true=yt, y_pred=pred_binary_th_optimal)
             rec_optimal = recall_score(y_true=yt, y_pred=pred_binary_th_optimal)
             f1_optimal = f1_score(y_true=yt, y_pred=pred_binary_th_optimal)
-
-            #opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
 
             wandb.log({
             'n_epoch' : ep,
@@ -238,8 +221,6 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
 
         print('logging complete.')
 
-        # print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
-
 
 def get_train_val_split(dset_full):
     print('splitting in train/test...')
@@ -253,7 +234,6 @@ def get_train_val_split(dset_full):
 def print_grid(x, y, batchsize, bi):
     x = x.cpu()
     y = y.cpu()
-    # print(y)
     y_reshaped = y.reshape(2, -1).numpy()
     grid_img = torchvision.utils.make_grid(x, nrow=int(batchsize/2), normalize=True)
     plt.title(f'batch iteration: {bi}\n{y_reshaped[0]}\n{y_reshaped[1]}')
@@ -264,7 +244,7 @@ def print_grid(x, y, batchsize, bi):
 def test_model(model):
     # with trained model, predict class for every x,y in test set
     # log the respective metrics (only one value per metric)
-    # plot the incorrect classifications
+    # TODO: plot the incorrect classifications
 
     time_start = time()
     epoch = 0
@@ -278,7 +258,6 @@ def test_model(model):
 
     running_loss = 0  # loss (to be updated during batch iteration)
     y_true_total = []
-    y_pred_probab_total = None
     y_pred_logits_total = None
     y_pred_binary_total_th_std = []
     y_pred_binary_total_th_optimal = []
@@ -295,15 +274,12 @@ def test_model(model):
             loss = criterion(pred_logits, y)
             
             yprobab = torch.softmax(pred_logits, dim=1)  # [log_every*batchsize, 2] probas between 0 and 1, sum up to one
-            #yprobab_neg = yprobab[:, 0]
-            yprobab_pos = yprobab[:, 1]  # compute metrics for class one            
+            yprobab_pos = yprobab[:, 1]  # compute metrics for class one  (yprobab_neg = yprobab[:, 0])          
             
             threshold = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
 
             pred_binary_th_std = yprobab.argmax(dim=1)  # threshold 0.5 # either 0 or 1 / shape: batchsize (8) / takes higher probablity (from the two classes) to compare to y (y_true)
             pred_binary_th_optimal = (yprobab_pos > threshold).float()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
-
-
 
         # stats
         y_true = y.cpu().tolist()
@@ -323,12 +299,9 @@ def test_model(model):
         batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
         running_loss += batch_loss
 
-
         if batch_iteration[phase]%len(dloader) == 0:  # after having seen the whole test set, do logging
             loss = running_loss/len(dloader)
             print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
-
-            # TODO adapt function, log with std and optimal threshold
             get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total_th_std, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase], ypred_th_optimal=y_pred_binary_total_th_optimal)
 
     time_end = time()
@@ -361,13 +334,11 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             running_loss = 0  # loss (to be updated during batch iteration)
 
             y_true_total = []
-            y_pred_probab_total = None
             y_pred_logits_total = None
             y_pred_binary_total = []
 
-
             for x, y in dloader:
-                #for i in range(1000):
+                #for i in range(1000):  # to check if one ele can be learned
                 batch_iteration[phase] += 1
 
                 # move to GPU
@@ -388,14 +359,6 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 # forward pass, track history (calc gradients) only in training
                 with torch.set_grad_enabled(phase == 'train'):
                     pred_logits = model(x)  # predictions (logits) (for class 0 and 1) / shape: batchsize, nclasses (8,2)
-
-                    y_pred_logits_neg = pred_logits[:, 0]  # [8]
-                    y_pred_logits_pos = pred_logits[:, 1]  # [8]
-
-
-                    # y_probab = pred_logits[:,1]   # probability for class one: pred[:,1] / shape: batchsize (8)
-                    # y_probab = pred_logits
-
                     pred_binary = pred_logits.argmax(dim=1)  # [8], threshold 0.5 # either 0 or 1 / shape: batchsize (8) / take higher value (from the two classes) to compare to y (y_true)
 
                     loss = criterion(pred_logits, y)
@@ -406,18 +369,18 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 # stats
                 y_true = y.cpu().tolist()
 
-                # y_pred_probab = y_probab.cpu().tolist()  # prob for class one
-                # y_pred_probab = y_probab
                 y_pred_binary = pred_binary.cpu().tolist() 
 
-                # debug - problematic: y_pred_binary is full with 0 (1 never gets predicted)
+                # debug - e.g. if problematic that y_pred_binary is full with 0 (1 never gets predicted)
                 #print(y_true)
                 #print(y_pred_binary)
                 #print()
 
+                # accumulate GT and binary predictions (with std threshold)
                 y_true_total.extend(y_true)
                 y_pred_binary_total.extend(y_pred_binary)
-                # y_pred_probab_total.extend(y_pred_probab)
+
+                # accumulate logits (conversion to probab happens later) to log metrics with different thresholds
                 if batch_iteration[phase] % len(dloader) != 1:
                     y_pred_logits_total = torch.cat((y_pred_logits_total, pred_logits))
                 else:
@@ -427,31 +390,17 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
                 running_loss += batch_loss
 
-                """
-                # array([[a, b],
-                #        [c, d]])
-                # a: tn (0 true, 0 predicted)  # negative is predicted, and the prediction is true
-                # b: fp (0 true, 1 predicted)  # positive is predicted, and the prediction is wrong
-                # c: fn (1 true, 0 predicted)  # negative is predicted, and the prediction is wrong
-                # d: tp (1 true, 1 predicted)  # positive is predicted, and the prediction is true
-                # to extract all values:
-                # (tn, fp, fn, tp) = cm.ravel()
-                """
-
                 if phase == 'train':
                     if (batch_iteration[phase]%LOG_EVERY) == 0:
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over {LOG_EVERY} batch iterations): {loss}')
-
                         get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
-
                         running_loss = 0
 
                 if phase == 'val':
                     if batch_iteration[phase]%len(dloader) == 0:  # last validation loop
                         loss = running_loss/len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
-
                         get_and_log_metrics(yt=y_true_total, ypred_th_std=y_pred_binary_total, ylogits=y_pred_logits_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
 
@@ -587,7 +536,7 @@ if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
     weights = torch.Tensor([0.2, 0.8]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
-elif WEIGHTED == 'Auto':  # TODO: check if works (with new dataset class)
+elif WEIGHTED == 'Auto':
     n_class_0, n_class_1 = dset_train.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
     w0, w1 = n_class_1/n_tot, n_class_0/n_tot
