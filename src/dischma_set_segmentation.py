@@ -12,9 +12,7 @@ from torchvision import transforms
 from matplotlib import pyplot as plt
 from rasterio.plot import show
 from rasterio.windows import Window
-from os.path import isfile, join
-from PIL import Image
-from time import time
+from os.path import isfile
 
 from dischma_set_classification import get_manual_label_or_None
 
@@ -114,9 +112,10 @@ def get_nonfoggy(lst, path):
     return nonfoggy
     # append non foggy images to list
 
-def data_augmentation(tensor_img_lbl, augm_pipeline, norm, coljit):
+def data_augmentation(tensor_img_lbl, augm_pipeline, gblur, norm, coljit):
     imglbl = augm_pipeline(tensor_img_lbl)  # together to have same random seed
     img = imglbl[0:3, ...]
+    img = gblur(img)
     img = norm(img)
     img = coljit(img)
 
@@ -126,19 +125,10 @@ def data_augmentation(tensor_img_lbl, augm_pipeline, norm, coljit):
 
     return img.to(torch.float64), lbl.long()  # augmented_imglbl
 
-"""
-nbr = 0
-p = f'correctly_placed_labels/number_{nbr}.png'
-while os.path.isfile(p):
-    nbr += 1
-    p = f'correctly_placed_labels/number_{nbr}.png'
-plt.imsave(fname=p, arr=label_full)
-"""
-
 
 class DischmaSet_segmentation():
 
-    def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1', 'Buelenberg_2'], mode='train') -> None:
+    def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'], mode='train') -> None:
         """
         get lists with filenames from corresponding input cams
         two lists:
@@ -152,7 +142,7 @@ class DischmaSet_segmentation():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
-        self.patch_size = (256, 256)  # (256*8, 256*8)
+        self.patch_size = (256*2, 256*2)  # (256*8, 256*8) for clearly visible images
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
@@ -166,13 +156,12 @@ class DischmaSet_segmentation():
         # data augmentation
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
-            ###self.normalize,
             # transforms.RandomCrop(size=(int(0.8*self.patch_size[0]), int(0.8*self.patch_size[1]))),  # already cropped when choosing patches
             transforms.RandomHorizontalFlip(p=1),  # here p=1, as p=0.5 will be applied for whole RandomApply block
-            transforms.GaussianBlur(kernel_size=5),
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
-            ###transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons)
+            # transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons) - uncomment to check images (for manual segmentation)
             ]), p=0.5)
+        self.gblur = transforms.GaussianBlur(kernel_size=5),
         self.coljit = transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)
 
 
@@ -181,7 +170,6 @@ class DischmaSet_segmentation():
         self.label_path_list = []
         for camstation in stat_cam_lst:
             STATION, CAM = camstation.split('_')
-            # print(STATION, CAM)
 
             self.PATH_COMP_IMG = os.path.join(self.root, f'Composites/Cam{CAM}_{STATION}')
             self.file_list_camstat_imgs = sorted([f for f in os.listdir(self.PATH_COMP_IMG) if (f.endswith('.png') or f.endswith('.jpg')) and isfile(os.path.join(self.PATH_COMP_IMG, f))]) 
@@ -198,8 +186,9 @@ class DischmaSet_segmentation():
                     if day in self.DAYS_TEST and yr in self.YEAR_TEST:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
 
-            # remove foggy images
+            # remove foggy images (in case composite image is foggy)
             self.compositeimage_path_list = get_nonfoggy(lst=self.compositeimage_path_list, path=self.PATH_COMP_IMG)
+
 
             self.PATH_LABELS = os.path.join(self.root, f'final_workdir_{STATION}_Cam{CAM}')
             self.file_list_camstat_lbl = sorted([f for f in os.listdir(self.PATH_LABELS) if f.endswith('.tif') and isfile(os.path.join(self.PATH_LABELS, f))])
@@ -219,8 +208,6 @@ class DischmaSet_segmentation():
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
 
         # TODO: make sure to all days in compositeimage_path_list, resp. label_path_list a coresponding baseline exists !!!
-        # TODO: create new lists depending on phase (train/val/test) - DONE
-        # DONE: make sure composites are not foggy
 
 
     def __len__(self):
@@ -248,25 +235,25 @@ class DischmaSet_segmentation():
         img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
         img_patch = img_patch/255
 
-        i = torch.as_tensor(img_patch).to(self.device)  # if errors, change to torch.as_tensor()
+        i = torch.as_tensor(img_patch).to(self.device)  # if errors, change from torch.Tensor() to torch.as_tensor()
         l = torch.as_tensor(lbl_patch).to(self.device)
 
+        return i.float(), l.long()
 
+        '''
         # cat img and lbl tensors together, apply train augmentation, the split again to img, lbl
         # note:
-        #   ColorJitter and Normalization only for img
-        #   RandomHorizontalFlip and GaussianBlur applied on img and label with given probability
-        imglbl = torch.cat((i, l), dim=0)  # torch.Size([4, 2048, 2048])
-        i, l = data_augmentation(imglbl, self.train_augmentation, self.normalize, self.coljit)
+        #   ColorJitter, GaussianBlur and Normalization only for img
+        #   RandomHorizontalFlip applied on img and label with given probability
+        imglbl = torch.cat((i, l), dim=0)  # torch.Size([4, patch_size[0], patch_size[1]])
+        i, l = data_augmentation(imglbl, self.train_augmentation, self.gblur, self.normalize, self.coljit)
 
         """
         # test plots:
         plt.imshow(np.transpose(img.cpu().numpy(), (1,2,0)).squeeze())
         plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)).squeeze())
-        """
         # plt.imsave()
         
-        """
         # plot images and labels
         plt.figure()
         f, axarr = plt.subplots(2, 1) #subplots(r,c) provide the no. of rows and columns
@@ -276,13 +263,14 @@ class DischmaSet_segmentation():
         axarr[1].imshow(np.transpose(l.cpu().numpy(), (1,2,0)))
         plt.show()
         """
-        
-        # assert(i.isnan().any() == False)
 
         return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
+        '''
+
 
     def get_balancedness():
         pass
+
 
 if __name__=='__main__':
 
@@ -292,7 +280,17 @@ if __name__=='__main__':
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'])
     #for n in range(30, 100):
     #    img, lbl = x.__getitem__(n)
-    img, lbl = x.__getitem__(90)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)
+    img, lbl = x.__getitem__(50)  # at this breakpoint: img/lbl_ehafner_v01.jpg/tif (if getitem was already called 8 times)
+    img, lbl = x.__getitem__(50)  # at this breakpoint: img/lbl_ehafner_v02.jpg/tif
+
     #plt.imshow(np.transpose(img.cpu().numpy(), (1,2,0)).squeeze())
     #plt.imshow(np.transpose(lbl.cpu().numpy(), (1,2,0)).squeeze())
 
