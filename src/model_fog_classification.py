@@ -240,6 +240,14 @@ def print_grid(x, y, batchsize, bi):
     plt.imshow(grid_img.permute(1, 2, 0))
     plt.savefig(f'stats/fig_check_manually/grid_batch_iteration_{bi}')
 
+def append_misclassified(x, yt, ypred_bin):
+    global x_misclassified
+    for y_idx in range(len(yt)):
+        if yt[y_idx] != ypred_bin[y_idx]:
+            current_x = x[y_idx]
+            current_x = current_x.unsqueeze(0)
+            x_misclassified = torch.cat((x_misclassified, current_x))
+            print()
 
 def test_model(model):
     # with trained model, predict class for every x,y in test set
@@ -262,6 +270,9 @@ def test_model(model):
     y_pred_binary_total_th_std = []
     y_pred_binary_total_th_optimal = []
 
+    global x_misclassified
+    x_misclassified = torch.Tensor().to(device)
+
     for x, y in dloader:
         batch_iteration[phase] += 1
 
@@ -272,23 +283,30 @@ def test_model(model):
         with torch.set_grad_enabled(phase == 'train'):
             pred_logits = model(x)  # predictions (logits) (for class 0 and 1) / shape: batchsize, nclasses (8,2)
             loss = criterion(pred_logits, y)
-            
+
             yprobab = torch.softmax(pred_logits, dim=1)  # [log_every*batchsize, 2] probas between 0 and 1, sum up to one
             yprobab_pos = yprobab[:, 1]  # compute metrics for class one  (yprobab_neg = yprobab[:, 0])          
-            
-            threshold = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
+
+            if not  LOAD_MODEL:
+                threshold = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
 
             pred_binary_th_std = yprobab.argmax(dim=1)  # threshold 0.5 # either 0 or 1 / shape: batchsize (8) / takes higher probablity (from the two classes) to compare to y (y_true)
-            pred_binary_th_optimal = (yprobab_pos > threshold).float()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
+            if not  LOAD_MODEL:
+                pred_binary_th_optimal = (yprobab_pos > threshold).float()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
 
         # stats
         y_true = y.cpu().tolist()
         y_pred_binary_th_std = pred_binary_th_std.cpu().tolist()
-        y_pred_binary_th_optimal = pred_binary_th_optimal.cpu().tolist()
+        if not  LOAD_MODEL:
+            y_pred_binary_th_optimal = pred_binary_th_optimal.cpu().tolist()
+        
+        append_misclassified(x, y_true, y_pred_binary_th_std)
+
 
         y_true_total.extend(y_true)
         y_pred_binary_total_th_std.extend(y_pred_binary_th_std)
-        y_pred_binary_total_th_optimal.extend(y_pred_binary_th_optimal)
+        if not  LOAD_MODEL:
+            y_pred_binary_total_th_optimal.extend(y_pred_binary_th_optimal)
 
         if batch_iteration[phase] % len(dloader) != 1:
             y_pred_logits_total = torch.cat((y_pred_logits_total, pred_logits))
@@ -440,6 +458,7 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--epochs', type=int, help='number of training epochs')
 parser.add_argument('--train_split', type=float, help='train split')
 parser.add_argument('--stations_cam', help='list of stations with camera number, separated with underscore (e.g. Buelenberg_1')
+parser.add_argument('--test_on_dset', help='if None, test on same set as model was trained - this variable is to make sure a model can be tested on single cam if trained on all cams')
 parser.add_argument('--weighted', help='how to weight the classes (manual: as given in script / Auto: Inversely proportional to occurance / False: not at all')
 parser.add_argument('--path_dset', help='path to used dataset ')
 parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and if so after how many epochs to reduced LR')
@@ -450,7 +469,7 @@ parser.add_argument('--momentum', type=float, help='set momentum used for SGD op
 
 args = parser.parse_args()
 
-LOGGING = True
+LOGGING = False
 if LOGGING:
     wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # set device
@@ -474,12 +493,19 @@ STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
 STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
+TEST_ON_DSET_STR = args.stations_cam
+TEST_ON_DSET_STR = TEST_ON_DSET_STR.replace("\\", "")
+TEST_ON_DSET_LST = ast.literal_eval(TEST_ON_DSET_STR)  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
+
+
 N_CLASSES = 2
 BETA = 1
 EPSILON = 0
 PATH_MODEL = f'models/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
+PATH_LOAD_MODEL = f'final_models_classification_v01/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
+
 LOG_EVERY = 200
-LOAD_MODEL = False
+LOAD_MODEL = True
 
 BASELINES = {
     "['Buelenberg_1']" : {'PRECISION': 0.52, 'RECALL': 0.913},
@@ -512,7 +538,12 @@ dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CA
 """
 dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
 dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
+
+if not TEST_ON_DSET_LST: # no special list given to evaluate on
+    dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
+else:  # a list is given to eval test set on
+    dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=TEST_ON_DSET_LST, mode='test')
+
 
 print(f'Dischma sets (train, val and test) with data from {STATIONS_CAM_LST} created.')
 
@@ -572,9 +603,9 @@ elif MODEL_TYPE == 'googlenet':
     model = models.GoogLeNet(num_classes=N_CLASSES)
 
 if LOAD_MODEL:
-    if os.path.exists(PATH_MODEL) == True:
+    if os.path.exists(PATH_LOAD_MODEL) == True:
         print('trained model already exists, loading model...')
-        model = torch.load(PATH_MODEL)
+        model = torch.load(PATH_LOAD_MODEL)
 
 model = model.to(device)
 
@@ -591,6 +622,18 @@ elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 print('criterion: ', criterion, 'optimizer: ', optimizer, 'lr scheduler: ', exp_lr_scheduler)
 
-train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
+if not LOAD_MODEL:
+    train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
 
 test_model(model=model)
+
+
+def plot_misclassifications():
+
+    plt.title(f'misclassifications from {STATIONS_CAM_LST}')
+    grid_img = torchvision.utils.make_grid(x_misclassified.cpu(), normalize=True)
+    plt.imshow(grid_img.permute(1, 2, 0))
+    plt.savefig(f'misclassifications/misclassification_cams_{STATIONS_CAM_LST}')
+
+plot_misclassifications()
+
