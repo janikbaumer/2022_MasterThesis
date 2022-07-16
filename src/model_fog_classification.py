@@ -504,7 +504,6 @@ EPSILON = 0
 PATH_MODEL = f'models_classification/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 PATH_LOAD_MODEL = f'final_models_classification_v01/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 
->>>>>>> d77f3388cba53d46f4df5eaaea35e3d7c5ddd495
 LOG_EVERY = 200
 LOAD_MODEL = True
 
