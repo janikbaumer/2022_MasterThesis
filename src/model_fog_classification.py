@@ -297,15 +297,15 @@ def test_model(model):
         # stats
         y_true = y.cpu().tolist()
         y_pred_binary_th_std = pred_binary_th_std.cpu().tolist()
-        if not  LOAD_MODEL:
+        if not LOAD_MODEL:
             y_pred_binary_th_optimal = pred_binary_th_optimal.cpu().tolist()
         
-        append_misclassified(x, y_true, y_pred_binary_th_std)
+        # append_misclassified(x, y_true, y_pred_binary_th_std)
 
 
         y_true_total.extend(y_true)
         y_pred_binary_total_th_std.extend(y_pred_binary_th_std)
-        if not  LOAD_MODEL:
+        if not LOAD_MODEL:
             y_pred_binary_total_th_optimal.extend(y_pred_binary_th_optimal)
 
         if batch_iteration[phase] % len(dloader) != 1:
@@ -505,7 +505,7 @@ PATH_MODEL = f'models_classification/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEAR
 PATH_LOAD_MODEL = f'final_models_classification_v01/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 
 LOG_EVERY = 200
-LOAD_MODEL = True
+LOAD_MODEL = False
 
 BASELINES = {
     "['Buelenberg_1']" : {'PRECISION': 0.52, 'RECALL': 0.913},
@@ -637,5 +637,5 @@ def plot_misclassifications():
     plt.imshow(grid_img.permute(1, 2, 0))
     plt.savefig(f'misclassifications/misclassification_cams_{STATIONS_CAM_LST}')
 
-plot_misclassifications()
+# plot_misclassifications()
 
