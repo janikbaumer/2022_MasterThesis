@@ -287,7 +287,7 @@ def test_model(model):
             yprobab = torch.softmax(pred_logits, dim=1)  # [log_every*batchsize, 2] probas between 0 and 1, sum up to one
             yprobab_pos = yprobab[:, 1]  # compute metrics for class one  (yprobab_neg = yprobab[:, 0])          
 
-            if not  LOAD_MODEL:
+            if not LOAD_MODEL:
                 threshold = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
 
             pred_binary_th_std = yprobab.argmax(dim=1)  # threshold 0.5 # either 0 or 1 / shape: batchsize (8) / takes higher probablity (from the two classes) to compare to y (y_true)
@@ -469,7 +469,7 @@ parser.add_argument('--momentum', type=float, help='set momentum used for SGD op
 
 args = parser.parse_args()
 
-LOGGING = False
+LOGGING = True
 if LOGGING:
     wandb.init(project="model_fog_classification", entity="jbaumer", config=args)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # set device
