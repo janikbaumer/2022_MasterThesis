@@ -493,7 +493,7 @@ STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
 STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
-TEST_ON_DSET_STR = args.stations_cam
+TEST_ON_DSET_STR = args.test_on_dset
 TEST_ON_DSET_STR = TEST_ON_DSET_STR.replace("\\", "")
 TEST_ON_DSET_LST = ast.literal_eval(TEST_ON_DSET_STR)  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
@@ -537,11 +537,13 @@ dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_
 dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 """
 dset_train = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
 
-if not TEST_ON_DSET_LST: # no special list given to evaluate on
+if not TEST_ON_DSET_LST: # no special list given to evaluate on 
+    dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
     dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
-else:  # a list is given to eval test set on
+
+else:  # a list is given to eval test set on 
+    dset_val = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=TEST_ON_DSET_LST, mode='val')
     dset_test = DischmaSet_classification(root=PATH_DATASET, stat_cam_lst=TEST_ON_DSET_LST, mode='test')
 
 
