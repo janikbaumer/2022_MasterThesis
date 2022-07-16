@@ -17,16 +17,17 @@
             [
                 "--batch_size", "8",
                 "--lr", "0.0001",
-                "--epochs", "5",
+                "--epochs", "100",
                 "--train_split", "0.8",
                 "--path_dset", "../datasets/dataset_downsampled/",
-                "--stations", "['Stillberg_1']", //  , 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Stillberg_2']",  //comma separated, single elements in single string quotes, station_cam separated with underscore !
-                "--weighted", "Manual", //Manual, Auto, False
+                "--stations", "['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']", // "['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']", // use one or all, otherwise baseline won't be found // comma separated, single elements in single string quotes, station_cam separated with underscore !
+                "--test_on_dset", "['Buelenberg_1']", // max one ele in list !!! - if None, test on same set as model was trained - this variable is to make sure a model can be tested on single cam if trained on all cams
+                "--weighted", "Auto", //Manual, Auto, False
                 "--model", "resnet", //resnet, efficientnet, densenet, vgg11, googlenet
                 "--optim", "SGD", // Adam, SGD
                 "--lr_scheduler", "15", //either integer or "None"
                 "--weight_decay", "0.1", // used for both, SGD and Adam optimizer, 0.1
-                "--momentum", "0.9", // used for SGD optimizer, 0.9
+                "--momentum", "0.8", // used for SGD optimizer, 0.9
             ]
         },
         {
@@ -40,13 +41,16 @@
             "justMyCode": false,
             "args":
             [
-                "--batch_size", "16",
-                "--lr", "0.01",
-                "--epochs", "25",
+                "--batch_size", "8",
+                "--lr", "0.0001",
+                "--epochs", "60",
                 "--train_split", "0.8",
-                "--stations", "['Buelenberg_1', 'Stillberg_2', 'Sattel_1']",  //comma separated, single elements in string quotes, station_cam separated with underscore !
                 "--path_dset", "../datasets/dataset_complete/",
+                "--optim", "SGD", // Adam, SGD
                 "--lr_scheduler", "7", //either integer or "None"
+                "--weight_decay", "0.1", // used for both, SGD and Adam optimizer, 0.1
+                "--momentum", "0.8", // used for SGD optimizer, 0.9
+                "--stations", "['Buelenberg_1']",  //comma separated, single elements in string quotes, station_cam separated with underscore !
             ],
             "env": 
                 {
@@ -64,7 +68,7 @@
             "justMyCode": false,
             "args":
             [
-                "--stations", "['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']",
+                "--stations", "['Stillberg_3']", //, 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']",
                 "--path_dset", "../datasets/dataset_downsampled/"
             ]
         },
