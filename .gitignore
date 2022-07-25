@@ -142,6 +142,8 @@ src/fig_check_manually
 src/fig_check_manually.zip
 src/correctly_placed_labels
 src/label_segment/
+src/final_models_classification_v01
+src/models_classification
 reading_material/
 todel/*
-
+manual_segm_test/
