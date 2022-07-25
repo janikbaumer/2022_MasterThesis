@@ -144,6 +144,9 @@ src/correctly_placed_labels
 src/label_segment/
 src/final_models_classification_v01
 src/models_classification
+src/qgis_clipping
+src/segmentation_various_plots
 reading_material/
 todel/*
 manual_segm_test/
+manual_segm_test.zip
