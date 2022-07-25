@@ -10,7 +10,8 @@ import math
 
 from time import time
 import numpy as np
-from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, confusion_matrix
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, confusion_matrix, precision_recall_curve
+
 
 from torch.utils.data import DataLoader, random_split
 from torch import nn
@@ -47,7 +48,135 @@ def print_grid(x, y, batchsize, batch_iteration):
 
     plt.savefig(f'stats/fig_check_manually/grid_segmentation_batch_iteration_{batch_iteration}')
 
-def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
+def get_optimal_prec_rec_f1_th_and_prtable(ytrue, yprob_pos):
+    """
+    get metrics by choosing the threshold (from pr-curve),
+    so that optimal f1-score is achieved
+    interesting to see how much better f1-score can be achieved
+
+    note:
+    for the test metrics, the threshold which yielded the optimal f1-score in the last validation loop is used.
+    """
+    prec_vec, rec_vec, th_vec = precision_recall_curve(y_true=ytrue, probas_pred=yprob_pos)
+    F1s_vec = (1 + BETA**2)*(prec_vec*rec_vec) / (BETA**2 * prec_vec + rec_vec + EPSILON)  # same shape as prec_vec and rec_vec
+    best_ind = np.nanargmax(F1s_vec)  # nanargmax ignores all NaN values
+    opt_f1 = F1s_vec[best_ind]  # optimal f1-score
+    opt_prec, opt_rec = prec_vec[best_ind], rec_vec[best_ind]
+    opt_thresh = th_vec[best_ind]
+    table = wandb.Table(data=[[x, y] for (x, y) in zip(prec_vec, rec_vec)], columns = ["Precision", "Recall"])
+    # table = wandb.Table(data=[[x, y] for (x, y) in zip(precs[::len(precs)//9800], recs[::len(recs)//9800])], columns = ["Precision", "Recall"]) 
+
+    return opt_prec, opt_rec, opt_f1, opt_thresh, table  # all scalar values (except for table)
+
+def get_and_log_metrics(yt, yt_short, ypred_bin, ypred_logits, ep, batch_it_loss, ph, bi):
+    """
+    yt: y_true_stack_total
+    yt_short: y_true_stack_selection
+    ypred_bin: y_pred_binary_stack_total - with standard threshold
+    ypred_logits: y_pred_logits_nosnow_stack_selection
+    
+    yt and ypred_bin should have same lenght
+    yt_short and ypred_logits should have same length
+    """
+
+    y_probab_pos = torch.sigmoid(ypred_logits)  # probabilities for class one (nosnow), because given like this as input to function
+
+    #yt = yt.tolist()
+    #yt_short = yt_short.tolist()
+    #ypred_bin = ypred_bin.tolist()
+    #ypred_logits = ypred_logits.tolist()
+
+    acc_std = accuracy_score(y_true=yt, y_pred=ypred_bin)
+    prec_std = precision_score(y_true=yt, y_pred=ypred_bin)
+    rec_std = recall_score(y_true=yt, y_pred=ypred_bin)
+    f1_std = f1_score(y_true=yt, y_pred=ypred_bin)
+
+    if LOGGING:
+        print(f'logging the {ph} set metrics...')
+
+        if ph == 'train':
+            wandb.log({
+                'n_epoch' : ep,
+                'batch_iteration' : bi,
+                f'{ph}/loss' : batch_it_loss,
+
+                f'{ph}/accuracy_th_std' : acc_std,
+                f'{ph}/precision_th_std' : prec_std,
+                f'{ph}/recall_th_std' : rec_std,
+                f'{ph}/F1-score_th_std' : f1_std,  # this should be high for good segmentation
+                f'{ph}/conf_mat_th_std' : wandb.plot.confusion_matrix(y_true=yt.tolist(), preds=ypred_bin.tolist(), class_names=['class 0 (snow)', 'class 1 (no snow)']),
+                #f'{ph}/precision_recall_curve' : wandb.plot.pr_curve(y_true=yt, y_probas=yprobab.detach().cpu(), labels=['class 0 (not foggy)', 'class 1 (foggy)']),
+                })
+
+        if ph == 'val':
+            # also log p-r-curve
+            # also log optimal metrics
+            # also get optimal threshold
+
+            # get optimal metrics
+            # here, only every 1000th element is taken (for yt_short and yprob_pob)
+            opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt_short.cpu().detach(), yprob_pos=y_probab_pos.cpu().detach())
+
+            global OPTIMAL_THRESHOLD  # where best f1-score is achieved
+            OPTIMAL_THRESHOLD = opt_thresh  # after last loop, this variable can be taken for test set threshold (as other fct-call, make variable global), is used is test-function
+
+            wandb.log({
+            'n_epoch' : ep,
+            'batch_iteration' : bi,
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+
+            f'{ph}/threshold_standard/accuracy' : acc_std,
+            f'{ph}/threshold_standard/precision' : prec_std,
+            f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+            f'{ph}/threshold_standard/F1-score' : f1_std,
+            f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt.tolist(), preds=ypred_bin.tolist(), class_names=['class 0 (snow)', 'class 1 (no snow)']),
+
+            f'{ph}/threshold_optimal/precision' : opt_prec,
+            f'{ph}/threshold_optimal/recall' : opt_rec,
+            f'{ph}/threshold_optimal/f1-score' : opt_f1,
+            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh,
+
+            })
+
+
+        if ph == 'test':
+            # TODO: do sth similar to what is done in model_fog_classification
+
+            # for predictions with optimal threshold: using optimal threshold from last validation loop
+            # if th_opt is got from last validation loop
+            th_opt = torch.tensor([OPTIMAL_THRESHOLD])
+
+            ### TODO check from here on !!!
+            pred_binary_th_optimal = (y_probab_pos > th_opt).float().cpu().tolist()  # threshold: last from validation # either 0 or 1 / shape: ???
+
+            acc_optimal = accuracy_score(y_true=yt_short, y_pred=pred_binary_th_optimal)
+            prec_optimal = precision_score(y_true=yt_short, y_pred=pred_binary_th_optimal)
+            rec_optimal = recall_score(y_true=yt_short, y_pred=pred_binary_th_optimal)
+            f1_optimal = f1_score(y_true=yt_short, y_pred=pred_binary_th_optimal)
+
+            wandb.log({
+            'n_epoch' : ep,
+            'batch_iteration' : bi,
+            f'{ph}/loss' : batch_it_loss,
+            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+
+            f'{ph}/threshold_standard/accuracy' : acc_std,
+            f'{ph}/threshold_standard/precision' : prec_std,
+            f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+            f'{ph}/threshold_standard/F1-score' : f1_std,
+            f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt.tolist(), preds=ypred_bin.tolist(), class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+            
+            f'{ph}/threshold_optimal/accuracy' : acc_optimal,
+            f'{ph}/threshold_optimal/precision' : prec_optimal,
+            f'{ph}/threshold_optimal/recall' : rec_optimal,
+            f'{ph}/threshold_optimal/f1-score' : f1_optimal,
+            f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD,
+
+            })
+
+
+'''def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
     """
     yt, ypred: torch.Tensors with equal shapes
     """
@@ -75,7 +204,7 @@ def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
                 })
 
     print(f'logged accuracy ({acc}), precision ({prec}), recall ({rec}) and f1 score ({f1})')
-
+'''
 
 def test_model(model):
     # with trained model, predict class for every x,y in test set
@@ -91,25 +220,28 @@ def test_model(model):
     print(f'{phase} phase starting...')
     model.eval()
     dloader = dloader_test
-
+    #TODO: correct dloader_test -> 
     running_loss = 0  # loss (to be updated during batch iteration)
-    
-    y_true_total = torch.Tensor().to(device)  # initialize as empty tensor
-    y_pred_binary_total = torch.Tensor().to(device)  # initialize as empty tensor
+
+    y_true_stack_total = torch.Tensor().to(device)
+    y_true_stack_selection = torch.Tensor().to(device)
+    y_pred_binary_stack_total = torch.Tensor().to(device)
+    y_pred_logits_nosnow_stack_selection = torch.Tensor().to(device)
 
     for x, y in dloader:
         batch_iteration[phase] += 1
 
         # move to GPU
-        x = x.to(device)
-        y = y.to(device)
-        y = y.squeeze()
+        # working with whole images
+        # x = x.to(device)
+        # y = y.to(device)
+        y = y.squeeze(1)
 
         with torch.set_grad_enabled(phase == 'train'):
             y_pred_logits = model(x)  # torch.Size([BS, n_classes, H, W]), e.g. [8, 3, 256, 256]  # logits, not probabilty !
+            
             # y_pred_logits.shape: [BS, n_classes, H, W]
             # y.shape: [BS, H, W], contains values 0, 1, or 2 (vals in range n_classes)
-
             loss = criterion(y_pred_logits, y)  # note: masking no data values is implicitly applied by setting weight for class 0 (no_data) to zero
 
             # if loss or x or y contain nan elements, breakpoint
@@ -118,25 +250,49 @@ def test_model(model):
                 loss.backward()  # backprop
                 optimizer.step()  # update params
 
-            # for metrics, get only argmax of cols 1 and 2, ignore col 0 (with logits for no data)
-            y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for 0th class (no data) -> consider logits for class 1 and 2 (3)
-            y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
 
+        # for metrics, get only argmax of cols 1 and 2, ignore col 0 (with logits for no data)
+        # y_pred_logits_data: at idx 0: snow / at idx 1: nosnow
+        y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for 0th class (no data) -> consider logits for class 1 and 2 (3)
+        y_pred_logits_snow = y_pred_logits_data[:, 0, :, :]  # shape [BS, 256, 256]  # considers logits for snow class
+        y_pred_logits_nosnow = y_pred_logits_data[:, 1, :, :]  # shape [BS, 256, 256]  # considers logits for nosnow class
+
+        y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
 
         # STATS
-        y_true_flat = y.flatten()  # contains 0, 1, 2
-        # ev todo: log logits as well (not only predictions)
-        # y_pred_flat_logits = y_pred_logits_data.view(BATCH_SIZE,2,-1)  # shape [BATCHSIZE, 2, 256x256], not completely flat
-        y_pred_flat_binary = y_pred_binary_data.flatten()  # contains 0, 1
+        y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
+        y_pred_logits_snow_flat = y_pred_logits_snow.flatten()
+        y_pred_logits_nosnow_flat = y_pred_logits_nosnow.flatten()
 
         # for metrics, only consider predictions of pixels that are not no_data
         y_true_data = y_true_flat[y_true_flat != 0]  # contains 1, 2
         y_true_data[y_true_data==1] = 0  # convert ones to zeros
-        y_true_data[y_true_data==2] = 1  # convert twos to ones     # now contains 0 (snow), 1 (no_snow)
-        y_pred_data = y_pred_flat_binary[y_true_flat != 0]  # contains 0, 1
+        y_true_data[y_true_data==2] = 1  # convert twos to ones
+        # y_true_data now contains 0 (snow), 1 (no_snow)
 
-        y_true_total = torch.cat((y_true_total, y_true_data), 0)  # append to flattened torch tensor 
-        y_pred_binary_total = torch.cat((y_pred_binary_total, y_pred_data), 0)
+        y_pred_binary_flat = y_pred_binary_data.flatten()  # contains 0 (snow), 1 (nosnow)
+        y_pred_binary_data = y_pred_binary_flat[y_true_flat != 0]
+        # y_pred_data now contains 0 (snow), 1 (nosnow)
+
+        # remove values at indices where the GT was no data
+        y_pred_logits_snow_flat = y_pred_logits_snow_flat[y_true_flat != 0]
+        y_pred_logits_nosnow_flat = y_pred_logits_nosnow_flat[y_true_flat != 0]
+
+        y_pred_logits_snow_flat_selection = y_pred_logits_snow_flat[::1000]  # use only every 1000th element, to avoid memory issues
+        y_pred_logits_nosnow_flat_selection = y_pred_logits_nosnow_flat[::1000]
+        
+        # slice GT in same way as the predicted logits, s.t. they match afterwards
+        y_true_data_selection = y_true_data[::1000]
+
+        # for all metrics, only log every 1000th element:
+        y_true_data = y_true_data[::1000]
+        y_pred_binary_data = y_pred_binary_data[::1000]
+
+
+        y_true_stack_total = torch.cat((y_true_stack_total, y_true_data), 0)  # append to flattened torch tensor 
+        y_pred_binary_stack_total = torch.cat((y_pred_binary_stack_total, y_pred_binary_data), 0)  # append to flattened torch tensor 
+        y_true_stack_selection = torch.cat((y_true_stack_selection, y_true_data_selection), 0)  # append to flattened torch tensor 
+        y_pred_logits_nosnow_stack_selection = torch.cat((y_pred_logits_nosnow_stack_selection, y_pred_logits_nosnow_flat_selection), 0)  # append to flattened torch tensor 
 
         # losses
         batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
@@ -146,10 +302,7 @@ def test_model(model):
         if batch_iteration[phase]%len(dloader) == 0:  # after having seen the whole test set, do logging
             loss = running_loss/len(dloader)
             print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole test dataloader): {loss}')
-
-            # TODO adapt function, log with std and optimal threshold
-            get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
-
+            get_and_log_metrics(yt=y_true_stack_total.cpu().detach(), yt_short= y_true_stack_selection.cpu().detach(), ypred_bin=y_pred_binary_stack_total.cpu().detach(), ypred_logits=y_pred_logits_nosnow_stack_selection.cpu().detach(), ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
 
     time_end = time()
     time_elapsed = time_end - time_start
@@ -184,9 +337,14 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
             #y_pred_binary_total = []
             #y_pred_logits_total = None
 
-            y_true_total = torch.Tensor().to(device)  # initialize as empty tensor
-            y_pred_binary_total = torch.Tensor().to(device)  # initialize as empty tensor
+            # y_true_total = torch.Tensor().to(device)  # initialize as empty tensor
+            # y_pred_binary_total = torch.Tensor().to(device)  # initialize as empty tensor
+            # y_pred_logits_nosnow_total = torch.Tensor().to(device)  # only append the data logits
 
+            y_true_stack_total = torch.Tensor().to(device)
+            y_true_stack_selection = torch.Tensor().to(device)
+            y_pred_binary_stack_total = torch.Tensor().to(device)
+            y_pred_logits_nosnow_stack_selection = torch.Tensor().to(device)
 
             for x, y in tqdm(dloader):
                 # skip this iteration if only 0 (no_data) in the y tensor
@@ -215,9 +373,9 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 with torch.set_grad_enabled(phase == 'train'):
 
                     y_pred_logits = model(x)  # torch.Size([BS, n_classes, H, W]), e.g. [8, 3, 256, 256]  # logits, not probabilty !
+                    
                     # y_pred_logits.shape: [BS, n_classes, H, W]
                     # y.shape: [BS, H, W], contains values 0, 1, or 2 (vals in range n_classes)
-
                     loss = criterion(y_pred_logits, y)  # note: masking no data values is implicitly applied by setting weight for class 0 (no_data) to zero
 
                     # if loss or x or y contain nan elements, breakpoint
@@ -226,24 +384,49 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                         loss.backward()  # backprop
                         optimizer.step()  # update params
 
-                    # for metrics, get only argmax of cols 1 and 2, ignore col 0 (with logits for no data)
-                    y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for 0th class (no data) -> consider logits for class 1 and 2 (3)
-                    y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
+                # for metrics, get only argmax of cols 1 and 2, ignore col 0 (with logits for no data)
+                # y_pred_logits_data: at idx 0: snow / at idx 1: nosnow
+                y_pred_logits_data = y_pred_logits[:, 1:, :, :]  # shape [BATCHSIZE, 2, 256, 256], consider all logits excepts for 0th class (no data) -> consider logits for class 1 and 2 (3)
+                y_pred_logits_snow = y_pred_logits_data[:, 0, :, :]  # shape [BS, 256, 256]  # considers logits for snow class
+                y_pred_logits_nosnow = y_pred_logits_data[:, 1, :, :]  # shape [BS, 256, 256]  # considers logits for nosnow class
+
+                y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
 
                 # STATS
-                y_true_flat = y.flatten()  # contains 0, 1, 2
-                # ev todo: log logits as well (not only predictions)
-                # y_pred_flat_logits = y_pred_logits_data.view(BATCH_SIZE,2,-1)  # shape [BATCHSIZE, 2, 256x256], not completely flat
-                y_pred_flat_binary = y_pred_binary_data.flatten()  # contains 0, 1
+                y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
+                y_pred_logits_snow_flat = y_pred_logits_snow.flatten()
+                y_pred_logits_nosnow_flat = y_pred_logits_nosnow.flatten()
 
                 # for metrics, only consider predictions of pixels that are not no_data
                 y_true_data = y_true_flat[y_true_flat != 0]  # contains 1, 2
                 y_true_data[y_true_data==1] = 0  # convert ones to zeros
-                y_true_data[y_true_data==2] = 1  # convert twos to ones     # now contains 0 (snow), 1 (no_snow)
-                y_pred_data = y_pred_flat_binary[y_true_flat != 0]  # contains 0, 1
+                y_true_data[y_true_data==2] = 1  # convert twos to ones
+                # y_true_data now contains 0 (snow), 1 (no_snow)
 
-                y_true_total = torch.cat((y_true_total, y_true_data), 0)  # append to flattened torch tensor 
-                y_pred_binary_total = torch.cat((y_pred_binary_total, y_pred_data), 0)
+                y_pred_binary_flat = y_pred_binary_data.flatten()  # contains 0 (snow), 1 (nosnow)
+                y_pred_binary_data = y_pred_binary_flat[y_true_flat != 0]
+                # y_pred_data now contains 0 (snow), 1 (nosnow)
+
+                # remove values at indices where the GT was no data
+                y_pred_logits_snow_flat = y_pred_logits_snow_flat[y_true_flat != 0]
+                y_pred_logits_nosnow_flat = y_pred_logits_nosnow_flat[y_true_flat != 0]
+
+                y_pred_logits_snow_flat_selection = y_pred_logits_snow_flat[::1000]  # use only every 1000th element, to avoid memory issues
+                y_pred_logits_nosnow_flat_selection = y_pred_logits_nosnow_flat[::1000]
+                
+                # slice GT in same way as the predicted logits, s.t. they match afterwards
+                y_true_data_selection = y_true_data[::1000]
+
+                # for all metrics, only log every 1000th element:
+                y_true_data = y_true_data[::1000]
+                y_pred_binary_data = y_pred_binary_data[::1000]
+
+
+                y_true_stack_total = torch.cat((y_true_stack_total, y_true_data), 0)  # append to flattened torch tensor 
+                y_pred_binary_stack_total = torch.cat((y_pred_binary_stack_total, y_pred_binary_data), 0)  # append to flattened torch tensor 
+                y_true_stack_selection = torch.cat((y_true_stack_selection, y_true_data_selection), 0)  # append to flattened torch tensor 
+                y_pred_logits_nosnow_stack_selection = torch.cat((y_pred_logits_nosnow_stack_selection, y_pred_logits_nosnow_flat_selection), 0)  # append to flattened torch tensor 
+
 
                 # LOSSES
                 batch_loss = loss.item() * x.shape[0]  # loss of whole batch (loss*batchsize (as loss was averaged ('mean')), each item of batch had this loss on avg)
@@ -253,14 +436,14 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     if (batch_iteration[phase]%LOG_EVERY) == 0:
                         loss = running_loss/LOG_EVERY
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} with {phase} loss (avg over these {LOG_EVERY} batch iterations): {loss}')
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_stack_total.cpu().detach(), yt_short= y_true_stack_selection.cpu().detach(), ypred_bin=y_pred_binary_stack_total.cpu().detach(), ypred_logits=y_pred_logits_nosnow_stack_selection.cpu().detach(), ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         running_loss = 0
 
                 if phase == 'val':
                     if batch_iteration[phase]%len(dloader) == 0:
                         loss = running_loss / len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
-                        get_and_log_metrics(yt=y_true_total, ypred=y_pred_binary_total, ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_stack_total.cpu().detach(), yt_short= y_true_stack_selection.cpu().detach(), ypred_bin=y_pred_binary_stack_total.cpu().detach(), ypred_logits=y_pred_logits_nosnow_stack_selection.cpu().detach(), ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
 
             if phase == 'train':  # at end of epoch (training, could also be end of validation)
@@ -338,6 +521,8 @@ STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
 STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
 N_CLASSES = 3
+BETA = 1
+EPSILON = 0
 PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}'
 LOG_EVERY = 20
 
@@ -355,7 +540,7 @@ dset_test = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
-dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)
+dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)  # TODO: ev change to 1 (if memory issues)
 
 print('lengths (train, val, test dloader): ', len(dloader_train), len(dloader_val), len(dloader_test))
 
@@ -390,7 +575,7 @@ model = smp.Unet(
 #    pretrained=True)
 
 model = model.to(device)
-model = model.to(torch.float64)  # set higher precision
+# model = model.to(torch.float64)  # set higher precision
 
 """
 # does not really work TODO ev delete
@@ -401,7 +586,9 @@ out = model(x_try)
 """
 
 # loss functions to try: BCE / IoU-loss / focal loss
-criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 1, 1]).to(device).to(torch.float64), reduction='mean')
+# criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 1, 1]).to(device).to(torch.float64), reduction='mean')
+# use normal precision 
+criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 0.2, 0.8]).to(device), reduction='mean')
 
 if OPTIM == 'SGD':
     optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY, momentum=MOMENTUM)
@@ -413,6 +600,7 @@ if LR_SCHEDULER != 'None':
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
+print('start training / validation...')
 train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
-
+print('start testing model...')
 test_model(model=model)
