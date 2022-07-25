@@ -1,3 +1,4 @@
+from cmath import phase
 import os
 import pandas as pd
 import torch
@@ -153,6 +154,22 @@ class DischmaSet_segmentation():
         self.YEAR_TRAIN_VAL = '2021'
         self.YEAR_TEST = '2020'
 
+        self.MT_DAYS_TEST = {
+            'Buelenberg_1' : ['0116', '0416', '0715', '1017'],  # 16th of Jan, 16th of April, 15th of July etc
+            'Buelenberg_2' : ['0116', '0416', '0712', '1014'],
+            'Giementaelli_1' : ['0116', '0417', '0717', '1017'],  # TODO: check what ehafner wrote, ev one img in Gt1 and Gt2 are mixed (wrong directory)
+            'Giementaelli_2' : ['0116', '0416', '0801', '1017'],  # TODO same as above
+            'Giementaelli_3' : ['0116', '0416', '0820', '1014'],  # TODO: some were Luksch_2, not Giementaelli_3
+            'Luksch_1': [],
+            'Luksch_2': [],
+            'Sattel_1': [],
+            'Sattel_2': [],
+            'Sattel_3': [],
+            'Stillberg_1': [],
+            'Stillberg_2': [],
+            'Stillberg_3': []
+        }
+
         # data augmentation
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
@@ -161,7 +178,7 @@ class DischmaSet_segmentation():
             # rotation / affine transformations / random perspective probably make no sense (for one model per cam), as camera installations will always be same (might make sense considering one model for multiple camera)
             # transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # might make sense (trees etc can change colors over seasons) - uncomment to check images (for manual segmentation)
             ]), p=0.5)
-        self.gblur = transforms.GaussianBlur(kernel_size=5),
+        self.gblur = transforms.GaussianBlur(kernel_size=5)
         self.coljit = transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)
 
 
@@ -176,6 +193,8 @@ class DischmaSet_segmentation():
             for file in self.file_list_camstat_imgs:
                 yr = file[6:10]
                 day = file[12:14]
+                mt_day = file[10:14]
+
                 if mode == 'train':
                     if day in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
@@ -183,11 +202,13 @@ class DischmaSet_segmentation():
                     if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
                 elif mode == 'test':
-                    if day in self.DAYS_TEST and yr in self.YEAR_TEST:
+                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
 
             # remove foggy images (in case composite image is foggy)
-            self.compositeimage_path_list = get_nonfoggy(lst=self.compositeimage_path_list, path=self.PATH_COMP_IMG)
+            # this is checked manually for test set, otherwise iso segmentation is not done !
+            if self.mode != 'test':
+                self.compositeimage_path_list = get_nonfoggy(lst=self.compositeimage_path_list, path=self.PATH_COMP_IMG)
 
 
             self.PATH_LABELS = os.path.join(self.root, f'final_workdir_{STATION}_Cam{CAM}')
@@ -195,14 +216,16 @@ class DischmaSet_segmentation():
             for file in self.file_list_camstat_lbl:
                 yr = file[6:10]
                 day = file[12:14]
+                mt_day = file[10:14]
+
                 if mode == 'train':
                     if day in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
                 elif mode == 'val':
                     if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
-                elif mode == 'test':
-                    if day in self.DAYS_TEST and yr in self.YEAR_TEST:
+                elif mode == 'test':  # TODO: adapt to those that were actually manually segmented
+                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and file.endswith('_iso_clip.tif'):
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
 
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
@@ -222,31 +245,72 @@ class DischmaSet_segmentation():
         return small patches from full images / labels for patch wise processing
         only patches are read (not full images) - faster processing
         """
+
         img_path = self.compositeimage_path_list[idx]
         label_path = self.label_path_list[idx]
 
-        label_shape = rasterio.open(label_path).shape
-        xrand = random.randint(0, label_shape[1] - self.patch_size[1])
-        yrand = random.randint(0, label_shape[0] - self.patch_size[0])
+        if self.mode == 'test':
+            # get image and label from manual segmentation
 
-        # get image and label patches
-        lbl_patch, xshift, yshift = get_label_patch_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
+            #img_path = '/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_testset/BB1/20200116/final_20200116.jpg'
+            #lbl_path_normal = '/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_testset/BB1/20200116/final_20200116_extract_snowclass_iso_rasterFromNormal.tif'
+            #lbl_path_iso = '/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_testset/BB1/20200116/final_20200116_extract_snowclass_iso_rasterFromIso.tif'
 
-        img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
-        img_patch = img_patch/255
+            with rasterio.open(img_path) as src:
+                img = src.read()
+            
+            with rasterio.open(label_path) as src:
+                lbl = src.read()
+            
+            img = img/255
 
-        i = torch.as_tensor(img_patch).to(self.device)  # if errors, change from torch.Tensor() to torch.as_tensor()
-        l = torch.as_tensor(lbl_patch).to(self.device)
+            img = torch.as_tensor(img).to(self.device)
+            lbl = torch.as_tensor(lbl).to(self.device)
 
-        return i.float(), l.long()
+            return img.float(), lbl.long()
 
-        '''
-        # cat img and lbl tensors together, apply train augmentation, the split again to img, lbl
-        # note:
-        #   ColorJitter, GaussianBlur and Normalization only for img
-        #   RandomHorizontalFlip applied on img and label with given probability
-        imglbl = torch.cat((i, l), dim=0)  # torch.Size([4, patch_size[0], patch_size[1]])
-        i, l = data_augmentation(imglbl, self.train_augmentation, self.gblur, self.normalize, self.coljit)
+            with rasterio.open(lbl_path_normal) as src:
+                arr_normal = src.read()
+
+            with rasterio.open(lbl_path_iso) as src:
+                arr_iso = src.read()
+            
+            print()
+                
+            with x as arr:
+                arr = src.read(window=Window(x_rand, y_rand, x_patch, y_patch))
+                x_topleft, y_topleft = src.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
+                x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
+                
+                arr[arr==85] = 1  # needed?
+                arr[arr==255] = 2  # needed?
+                arr[arr==3] = 2
+
+        else:  # train / val
+            label_shape = rasterio.open(label_path).shape
+            xrand = random.randint(0, label_shape[1] - self.patch_size[1])
+            yrand = random.randint(0, label_shape[0] - self.patch_size[0])
+
+            # get image and label patches
+            lbl_patch, xshift, yshift = get_label_patch_and_tf(label_path, self.patch_size, x_rand=xrand, y_rand=yrand)
+
+            img_patch = get_image_patch(img_path, xshift, yshift, self.patch_size, x_rand=xrand, y_rand=yrand)
+            img_patch = img_patch/255
+
+            i = torch.as_tensor(img_patch).to(self.device)  # if errors, change from torch.Tensor() to torch.as_tensor()
+            l = torch.as_tensor(lbl_patch).to(self.device)
+
+            # return i.float(), l.long()
+
+            # cat img and lbl tensors together, apply train augmentation, the split again to img, lbl
+            # note:
+            #   ColorJitter, GaussianBlur and Normalization only for img
+            #   RandomHorizontalFlip applied on img and label with given probability
+            if self.mode == 'train':
+                imglbl = torch.cat((i, l), dim=0)  # torch.Size([4, patch_size[0], patch_size[1]])
+                i, l = data_augmentation(imglbl, self.train_augmentation, self.gblur, self.normalize, self.coljit)
+
+            return i.float(), l.long()  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
 
         """
         # test plots:
@@ -264,9 +328,6 @@ class DischmaSet_segmentation():
         plt.show()
         """
 
-        return i, l  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
-        '''
-
 
     def get_balancedness():
         pass
@@ -276,6 +337,9 @@ if __name__=='__main__':
 
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
+
+    x1 = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_2'], mode='train')
+    i, l = x1.__getitem__(0)
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'])
     #for n in range(30, 100):
