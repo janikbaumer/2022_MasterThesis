@@ -159,7 +159,7 @@ def get_and_log_metrics(yt, yt_short, ypred_bin, ypred_logits, ep, batch_it_loss
             'n_epoch' : ep,
             'batch_iteration' : bi,
             f'{ph}/loss' : batch_it_loss,
-            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+            # f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
 
             f'{ph}/threshold_standard/accuracy' : acc_std,
             f'{ph}/threshold_standard/precision' : prec_std,
@@ -220,8 +220,13 @@ def test_model(model):
     print(f'{phase} phase starting...')
     model.eval()
     dloader = dloader_test
-    #TODO: correct dloader_test -> 
+    #TODO: correct dloader_test -> DONE
     running_loss = 0  # loss (to be updated during batch iteration)
+
+    # gpu has too slightly too small memory for loading whole test set -> use cpu
+    device = 'cpu'
+    model = model.to(device)
+    criterion.weight = criterion.weight.to(device)
 
     y_true_stack_total = torch.Tensor().to(device)
     y_true_stack_selection = torch.Tensor().to(device)
@@ -230,6 +235,10 @@ def test_model(model):
 
     for x, y in dloader:
         batch_iteration[phase] += 1
+        
+        # move to CPU (due to memory issues on GPU)
+        x = x.to(device)
+        y = y.to(device)
 
         # move to GPU
         # working with whole images
@@ -257,7 +266,18 @@ def test_model(model):
         y_pred_logits_snow = y_pred_logits_data[:, 0, :, :]  # shape [BS, 256, 256]  # considers logits for snow class
         y_pred_logits_nosnow = y_pred_logits_data[:, 1, :, :]  # shape [BS, 256, 256]  # considers logits for nosnow class
 
+        # ypld = y_pred_logits_data.to('cpu')
         y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
+
+        # save images from test set
+        print('saving test images...')
+        plt.imsave(f'segmentation_pred_on_testset/full_y_pred_batchit_{batch_iteration[phase]}.png', y_pred_binary_data[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/full_y_true_{batch_iteration[phase]}.png', y[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/full_x_{batch_iteration[phase]}.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+
+        plt.imsave(f'segmentation_pred_on_testset/full_y_pred_batchit_{batch_iteration[phase]}.tiff', y_pred_binary_data[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/full_y_true_batchit_{batch_iteration[phase]}.tiff', y[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/full_x_batchit_{batch_iteration[phase]}.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
 
         # STATS
         y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
@@ -391,6 +411,49 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 y_pred_logits_nosnow = y_pred_logits_data[:, 1, :, :]  # shape [BS, 256, 256]  # considers logits for nosnow class
 
                 y_pred_binary_data = y_pred_logits_data.argmax(axis=1, keepdim=False)  # only contains 0 (snow) or 1 (no_snow), note: this unfortunately also works if nan values in y_pred_logits_data 
+                # this y_pred_binary_data can be compared to y (GT) (take one element of batch for comparison)
+
+                # save images from validation (if in 2nd but last loop from last epoch)
+                # 2nd but last loop to be sure that full batch can be taken (not some residual images)
+                if epoch == num_epochs-1 and batch_iteration[phase]%len(dloader) == 1 and batch_iteration[phase] !=1 and phase == 'val':
+                    # save patches in last validation loop:
+                    print('saving validation images...')
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_05.png', y_pred_binary_data[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_05.png', y[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_05.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_06.png', y_pred_binary_data[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_06.png', y[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_06.png', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_07.png', y_pred_binary_data[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_07.png', y[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_07.png', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_08.png', y_pred_binary_data[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_08.png', y[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_08.png', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
+
+
+
+
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_05.tiff', y_pred_binary_data[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_05.tiff', y[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_05.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_06.tiff', y_pred_binary_data[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_06.tiff', y[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_06.tiff', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_07.tiff', y_pred_binary_data[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_07.tiff', y[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_07.tiff', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_08.tiff', y_pred_binary_data[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_y_true_08.tiff', y[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/patch_x_08.tiff', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
+
 
                 # STATS
                 y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
@@ -458,10 +521,10 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
 
     print(f'training and validation (on {device}) completed in {time_elapsed} seconds.')
 
-    """
+    
     # saving model
     torch.save(obj=model, f=PATH_MODEL)
-    """
+    
 
 
 ############ REPRODUCIBILITY ############
@@ -523,7 +586,12 @@ STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make su
 N_CLASSES = 3
 BETA = 1
 EPSILON = 0
-PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}'
+PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}_optim_{OPTIM}'
+
+#PATH_LOAD_MODEL = f'final_models_classification_v01/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
+PATH_LOAD_MODEL = PATH_MODEL
+LOAD_MODEL = False
+
 LOG_EVERY = 20
 
 
@@ -540,7 +608,7 @@ dset_test = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM
 
 dloader_train = DataLoader(dataset=dset_train, batch_size=BATCH_SIZE, shuffle=True)
 dloader_val = DataLoader(dataset=dset_val, batch_size=BATCH_SIZE)
-dloader_test = DataLoader(dataset=dset_test, batch_size=BATCH_SIZE)  # TODO: ev change to 1 (if memory issues)
+dloader_test = DataLoader(dataset=dset_test, batch_size=1)  # TODO: ev change to 1 (if memory issues)
 
 print('lengths (train, val, test dloader): ', len(dloader_train), len(dloader_val), len(dloader_test))
 
@@ -574,6 +642,13 @@ model = smp.Unet(
 #    init_features=32,
 #    pretrained=True)
 
+
+if LOAD_MODEL:
+    if os.path.exists(PATH_LOAD_MODEL) == True:
+        print('trained model already exists, loading model...')
+        model = torch.load(PATH_LOAD_MODEL)
+
+
 model = model.to(device)
 # model = model.to(torch.float64)  # set higher precision
 
@@ -601,6 +676,12 @@ elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
 print('start training / validation...')
-train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
+
+if not LOAD_MODEL:
+    train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
+    print('optimal threshold (to be used for test set): ', OPTIMAL_THRESHOLD)
+
 print('start testing model...')
+
+
 test_model(model=model)
