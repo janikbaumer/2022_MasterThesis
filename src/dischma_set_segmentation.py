@@ -127,6 +127,33 @@ def data_augmentation(tensor_img_lbl, augm_pipeline, gblur, norm, coljit):
     return img.to(torch.float64), lbl.long()  # augmented_imglbl
 
 
+def get_full_resolution_label(image, label):
+    """
+    should return 4000, 6000 label, where missing values were filled up with 3 (no data),
+    values are filled in at correct places (depending on affine transformation)
+    """
+    x_topleft, y_topleft = label.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
+    x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
+    full_shape = image.shape
+    label_cropped = label.read()[0]
+    # place label correctly in full sized image (4000, 6000)
+    # initialize with all 0's, then replace the pixels where there is a label
+    label_full = np.full(full_shape, 0)
+    label_full[y_shift:y_shift+label_cropped.shape[0], x_shift:x_shift+label_cropped.shape[1]] = label_cropped  # get full label 
+    label_full = label_full[np.newaxis, :]
+    """
+    nbr = 0
+    p = f'correctly_placed_labels/number_{nbr}.png'
+    while os.path.isfile(p):
+        nbr += 1
+        p = f'correctly_placed_labels/number_{nbr}.png'
+    plt.imsave(fname=p, arr=label_full)
+    """
+    return label_full
+
+
+
+
 class DischmaSet_segmentation():
 
     def __init__(self, root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'], mode='train') -> None:
@@ -143,7 +170,7 @@ class DischmaSet_segmentation():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
-        self.patch_size = (256*2, 256*2)  # (256*8, 256*8) for clearly visible images
+        self.patch_size = (256*4, 256*4)  # (256*8, 256*8) for clearly visible images
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
@@ -201,13 +228,13 @@ class DischmaSet_segmentation():
                 elif mode == 'val':
                     if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
-                elif mode == 'test':
+                elif mode == 'test' or mode == 'baseline':  # same composites for testing and baseline (but different labels, see below)
                     if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST:
                         self.compositeimage_path_list.append(os.path.join(self.PATH_COMP_IMG, file))
 
             # remove foggy images (in case composite image is foggy)
-            # this is checked manually for test set, otherwise iso segmentation is not done !
-            if self.mode != 'test':
+            # this is checked manually for test set, otherwise iso segmentation is not done ! (same valid for baseline)
+            if self.mode != 'test' and self.mode != 'baseline':
                 self.compositeimage_path_list = get_nonfoggy(lst=self.compositeimage_path_list, path=self.PATH_COMP_IMG)
 
 
@@ -224,9 +251,16 @@ class DischmaSet_segmentation():
                 elif mode == 'val':
                     if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
-                elif mode == 'test':  # TODO: adapt to those that were actually manually segmented
+                elif mode == 'test':
                     if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and file.endswith('_iso_clip.tif'):
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
+                elif mode == 'baseline':
+                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and not file.endswith('_iso_clip.tif'):  # TODO: check if condition is correct
+                        self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
+
+                # note: training and validation are with labels that were used by SLF so far
+                # note: baseline are the labels that were used by SLF so far (but same images as for test set)
+                # note: test set are images with unsupervised iso clustering and manual enhancement
 
         self.compositeimage_path_list, self.label_path_list = ensure_same_days(self.compositeimage_path_list, self.label_path_list)
 
@@ -249,7 +283,7 @@ class DischmaSet_segmentation():
         img_path = self.compositeimage_path_list[idx]
         label_path = self.label_path_list[idx]
 
-        if self.mode == 'test':
+        if self.mode == 'test' or self.mode == 'baseline':
             # get image and label from manual segmentation
 
             #img_path = '/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_testset/BB1/20200116/final_20200116.jpg'
@@ -260,31 +294,25 @@ class DischmaSet_segmentation():
                 img = src.read()
             
             with rasterio.open(label_path) as src:
-                lbl = src.read()
-            
+                image = rasterio.open(img_path)
+                lbl = get_full_resolution_label(image, src)
+                # lbl = src.read()
+
+            lbl[lbl==3] = 2
+
             img = img/255
 
             img = torch.as_tensor(img).to(self.device)
             lbl = torch.as_tensor(lbl).to(self.device)
 
+            # TODO: in case lbl is not 6000x4000, fill up with zeros correctly 
+
+            # make sure they are divisible by 32 (e.g. needed for U-Net)
+            img = transforms.functional.crop(img, top=0, left=0, height=32*(img.shape[1]//32), width=32*(img.shape[2]//32))  # ev everywhere -30*32
+            lbl = transforms.functional.crop(lbl, top=0, left=0, height=32*(lbl.shape[1]//32), width=32*(lbl.shape[2]//32))  # TODO: change back to 32 - get rid of memory issues
+
             return img.float(), lbl.long()
 
-            with rasterio.open(lbl_path_normal) as src:
-                arr_normal = src.read()
-
-            with rasterio.open(lbl_path_iso) as src:
-                arr_iso = src.read()
-            
-            print()
-                
-            with x as arr:
-                arr = src.read(window=Window(x_rand, y_rand, x_patch, y_patch))
-                x_topleft, y_topleft = src.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
-                x_shift, y_shift = int(abs(x_topleft)-0.5), int(abs(y_topleft)-0.5)  # -0.5 to get ints (no half numbers)
-                
-                arr[arr==85] = 1  # needed?
-                arr[arr==255] = 2  # needed?
-                arr[arr==3] = 2
 
         else:  # train / val
             label_shape = rasterio.open(label_path).shape
@@ -338,8 +366,13 @@ if __name__=='__main__':
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
-    x1 = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_2'], mode='train')
-    i, l = x1.__getitem__(0)
+    
+    x1 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='test')
+    x2 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='baseline')
+
+    #x1 = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_2'], mode='train')
+
+    i, l = x2.__getitem__(0)
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'])
     #for n in range(30, 100):
