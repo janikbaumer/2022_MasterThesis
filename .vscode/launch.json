@@ -42,14 +42,14 @@
             "args":
             [
                 "--batch_size", "4",
-                "--lr", "0.00001",
-                "--epochs", "100",
+                "--lr", "0.00001", // 0.00001
+                "--epochs", "150",
                 "--train_split", "0.8",
-                "--path_dset", "../datasets/dataset_complete/",
-                "--optim", "SGD", // Adam, SGD
-                "--lr_scheduler", "15", //either integer or "None"
+                "--path_dset", "/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", // "../datasets/dataset_complete/",
+                "--optim", "Adam", // Adam, SGD
+                "--lr_scheduler", "7", //either integer or "None"
                 "--weight_decay", "0.1", // used for both, SGD and Adam optimizer, 0.1
-                "--momentum", "0.8", // used for SGD optimizer, 0.9
+                "--momentum", "0.9", // used for SGD optimizer, 0.9
                 "--stations", "['Buelenberg_2']",  //comma separated, single elements in string quotes, station_cam separated with underscore !
             ],
             "env": 
@@ -70,6 +70,21 @@
             [
                 "--stations", "['Stillberg_3']", //, 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']",
                 "--path_dset", "../datasets/dataset_downsampled/"
+            ]
+        },
+        {
+            "name": "Launch Baseline Segmentation",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            //"cwd": "${workspaceFolder}"
+            "cwd": "${fileDirname}",
+            "justMyCode": false,
+            "args":
+            [
+                "--stations", "['Buelenberg_2']", //, 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']",
+                "--path_dset", "/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/"
             ]
         },
         {
