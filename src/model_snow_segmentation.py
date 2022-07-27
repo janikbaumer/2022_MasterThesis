@@ -32,6 +32,34 @@ print('imports done')
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 
+
+class SimpleNetwork(torch.nn.Module):
+    """Mini segmentation network."""
+
+    def __init__(self, in_channels, classes):
+        super(SimpleNetwork, self).__init__()
+
+        self.in_channels = in_channels
+        self.classes = classes
+
+        self.convs = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, 8, kernel_size=3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(8, 16, kernel_size=3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(32, 16, kernel_size=3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(16, 8, kernel_size=3, padding=1),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(8, classes, kernel_size=3, padding=1),
+        )
+
+    def forward(self, x):
+        return self.convs(x)
+
+
 def print_grid(x, y, batchsize, batch_iteration):
     x = x.cpu()
     y = y.cpu().float()
@@ -271,13 +299,13 @@ def test_model(model):
 
         # save images from test set
         print('saving test images...')
-        plt.imsave(f'segmentation_pred_on_testset/full_y_pred_batchit_{batch_iteration[phase]}.png', y_pred_binary_data[0].cpu().detach())
-        plt.imsave(f'segmentation_pred_on_testset/full_y_true_{batch_iteration[phase]}.png', y[0].cpu().detach())
-        plt.imsave(f'segmentation_pred_on_testset/full_x_{batch_iteration[phase]}.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+        plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_pred_batchit_{batch_iteration[phase]}.png', y_pred_binary_data[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_true_batchit_{batch_iteration[phase]}.png', y[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/large_patches/full_x_batchit_{batch_iteration[phase]}.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
 
-        plt.imsave(f'segmentation_pred_on_testset/full_y_pred_batchit_{batch_iteration[phase]}.tiff', y_pred_binary_data[0].cpu().detach())
-        plt.imsave(f'segmentation_pred_on_testset/full_y_true_batchit_{batch_iteration[phase]}.tiff', y[0].cpu().detach())
-        plt.imsave(f'segmentation_pred_on_testset/full_x_batchit_{batch_iteration[phase]}.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+        plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_pred_batchit_{batch_iteration[phase]}.tiff', y_pred_binary_data[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_true_batchit_{batch_iteration[phase]}.tiff', y[0].cpu().detach())
+        plt.imsave(f'segmentation_pred_on_testset/large_patches/full_x_batchit_{batch_iteration[phase]}.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
 
         # STATS
         y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
@@ -418,41 +446,41 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 if epoch == num_epochs-1 and batch_iteration[phase]%len(dloader) == 1 and batch_iteration[phase] !=1 and phase == 'val':
                     # save patches in last validation loop:
                     print('saving validation images...')
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_05.png', y_pred_binary_data[0].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_05.png', y[0].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_05.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_01.png', y_pred_binary_data[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_01.png', y[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_01.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_06.png', y_pred_binary_data[1].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_06.png', y[1].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_06.png', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_02.png', y_pred_binary_data[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_02.png', y[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_02.png', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_07.png', y_pred_binary_data[2].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_07.png', y[2].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_07.png', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_03.png', y_pred_binary_data[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_03.png', y[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_03.png', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_08.png', y_pred_binary_data[3].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_08.png', y[3].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_08.png', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
-
-
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_04.png', y_pred_binary_data[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_04.png', y[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_04.png', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
 
 
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_05.tiff', y_pred_binary_data[0].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_05.tiff', y[0].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_05.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_06.tiff', y_pred_binary_data[1].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_06.tiff', y[1].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_06.tiff', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_07.tiff', y_pred_binary_data[2].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_07.tiff', y[2].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_07.tiff', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_01.tiff', y_pred_binary_data[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_01.tiff', y[0].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_01.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/patch_y_pred_08.tiff', y_pred_binary_data[3].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_y_true_08.tiff', y[3].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/patch_x_08.tiff', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_02.tiff', y_pred_binary_data[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_02.tiff', y[1].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_02.tiff', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_03.tiff', y_pred_binary_data[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_03.tiff', y[2].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_03.tiff', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
+
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_04.tiff', y_pred_binary_data[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_04.tiff', y[3].cpu().detach())
+                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_04.tiff', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
 
 
                 # STATS
@@ -642,6 +670,8 @@ model = smp.Unet(
 #    init_features=32,
 #    pretrained=True)
 
+# model = SimpleNetwork(in_channels=3, classes=N_CLASSES)
+
 
 if LOAD_MODEL:
     if os.path.exists(PATH_LOAD_MODEL) == True:
@@ -661,7 +691,7 @@ out = model(x_try)
 """
 
 # loss functions to try: BCE / IoU-loss / focal loss
-# criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 1, 1]).to(device).to(torch.float64), reduction='mean')
+# criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 0.4, 0.6]).to(device), reduction='mean')
 # use normal precision 
 criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 0.2, 0.8]).to(device), reduction='mean')
 
