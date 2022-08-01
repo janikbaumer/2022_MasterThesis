@@ -150,4 +150,9 @@ reading_material/
 todel/*
 manual_segm_test/
 manual_segm_test.zip
+
+manual_segm_test_old.zip
+manual_segmentations_test_v02.zip
+manual_segmentations_test_backup/
+manual_segm_test_old/
 src/segmentation_pred_on_testset/
