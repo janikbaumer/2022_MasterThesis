@@ -102,15 +102,15 @@ class DischmaSet_classification():
             [transforms.Normalize(mean= [0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
             transforms.Normalize(mean= [-0.485, -0.456, -0.406], std=[1., 1., 1.])]
         )  # ev not needed
-        
+
         # rotation / affine transformations / random perspective probably make no sense (for one model per cam)
         # as camera installations will always be same (might make sense considering one model for multiple cameras)
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
-            self.normalize,
             transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.GaussianBlur(kernel_size=3),
-            transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3)  # as trees etc can change color over seasons
+            transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3),  # as trees etc can change color over seasons
+            self.normalize
         ]), p=1)
 
         self.val_test_augmentation = self.normalize
