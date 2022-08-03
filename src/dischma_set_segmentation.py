@@ -114,15 +114,17 @@ def get_nonfoggy(lst, path):
     # append non foggy images to list
 
 def data_augmentation(tensor_img_lbl, augm_pipeline, gblur, norm, coljit):
-    imglbl = augm_pipeline(tensor_img_lbl)  # together to have same random seed
+    imglbl = augm_pipeline(tensor_img_lbl)  # together to have same random seed (horizontal flip (+ev others) with same probability)
     img = imglbl[0:3, ...]
     img = gblur(img)
-    img = norm(img)
     img = coljit(img)
+    img = img.to(dtype=torch.float)
+    img = norm(img)
+    
 
     lbl = imglbl[-1, ...].unsqueeze(0)
     # lbl = norm(lbl)
-    # lbl = coljit(lbl)  #
+    # lbl = coljit(lbl)
 
     return img.to(torch.float64), lbl.long()  # augmented_imglbl
 
@@ -184,21 +186,26 @@ class DischmaSet_segmentation():
         self.MT_DAYS_TEST = {
             'Buelenberg_1' : ['0116', '0416', '0715', '1017'],  # 16th of Jan, 16th of April, 15th of July etc
             'Buelenberg_2' : ['0116', '0416', '0712', '1014'],
-            'Giementaelli_1' : ['0116', '0417', '0717', '1017'],  # TODO: check what ehafner wrote, ev one img in Gt1 and Gt2 are mixed (wrong directory)
+            'Giementaelli_1' : ['0116', '0417', '0718', '1017'],  # TODO: check what ehafner wrote, ev one img in Gt1 and Gt2 are mixed (wrong directory)
             'Giementaelli_2' : ['0116', '0416', '0801', '1017'],  # TODO same as above
-            'Giementaelli_3' : ['0116', '0416', '0820', '1014'],  # TODO: some were Luksch_2, not Giementaelli_3
-            'Luksch_1': [],
-            'Luksch_2': [],
-            'Sattel_1': [],
-            'Sattel_2': [],
-            'Sattel_3': [],
-            'Stillberg_1': [],
-            'Stillberg_2': [],
-            'Stillberg_3': []
+            'Giementaelli_3' : ['0116', '0416', '0713', '1017'],  # TODO: some were Luksch_2, not Giementaelli_3
+            'Luksch_1': ['0116', '0417', '0624', '0914'],
+            'Luksch_2': ['0116', '0417', '0820', '1018'],
+            'Sattel_1': ['0116', '0416', '0625', '1017'],
+            'Sattel_2': ['0117', '0416', '0625', '1017'],
+            'Sattel_3': ['0116', '0416', '0625', '0908'],
+            'Stillberg_1': ['0116', '0416', '0806', '1014'],
+            'Stillberg_2': ['0116', '0416', '0521', '0905'],
+            'Stillberg_3': ['0116', '0416', '0521', '0905']
         }
 
         # data augmentation
+        mean_ImageNet = np.asarray([0.485, 0.456, 0.406])
+        std_ImageNet = np.asarray([0.229, 0.224, 0.225])
+
         self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        self.denormalize = transforms.Normalize((-1*mean_ImageNet/std_ImageNet), (1.0/std_ImageNet))
+
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
             # transforms.RandomCrop(size=(int(0.8*self.patch_size[0]), int(0.8*self.patch_size[1]))),  # already cropped when choosing patches
             transforms.RandomHorizontalFlip(p=1),  # here p=1, as p=0.5 will be applied for whole RandomApply block
@@ -252,10 +259,10 @@ class DischmaSet_segmentation():
                     if day not in self.DAYS_TRAIN and yr in self.YEAR_TRAIN_VAL:
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
                 elif mode == 'test':
-                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and file.endswith('_iso_clip.tif'):
+                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and file.endswith('_iso_simplified_clip.tif'):
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
-                elif mode == 'baseline':
-                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and not file.endswith('_iso_clip.tif'):  # TODO: check if condition is correct
+                elif mode == 'baseline':  # take labels from SLF (old), not new ones with iso clustering
+                    if mt_day in self.MT_DAYS_TEST[camstation] and yr in self.YEAR_TEST and not file.endswith('_iso_simplified_clip.tif'):  # TODO: check if condition is correct
                         self.label_path_list.append(os.path.join(self.PATH_LABELS, file))
 
                 # note: training and validation are with labels that were used by SLF so far
@@ -292,24 +299,24 @@ class DischmaSet_segmentation():
 
             with rasterio.open(img_path) as src:
                 img = src.read()
-            
+                img = img/255
             with rasterio.open(label_path) as src:
                 image = rasterio.open(img_path)
+                # in case lbl is not 6000x4000, fill up with zeros correctly 
                 lbl = get_full_resolution_label(image, src)
                 # lbl = src.read()
 
             lbl[lbl==3] = 2
 
-            img = img/255
 
             img = torch.as_tensor(img).to(self.device)
             lbl = torch.as_tensor(lbl).to(self.device)
-
-            # TODO: in case lbl is not 6000x4000, fill up with zeros correctly 
-
+            
             # make sure they are divisible by 32 (e.g. needed for U-Net)
             img = transforms.functional.crop(img, top=0, left=0, height=32*(img.shape[1]//32), width=32*(img.shape[2]//32))  # ev everywhere -30*32
             lbl = transforms.functional.crop(lbl, top=0, left=0, height=32*(lbl.shape[1]//32), width=32*(lbl.shape[2]//32))  # TODO: change back to 32 - get rid of memory issues
+
+            img = self.normalize(img)
 
             return img.float(), lbl.long()
 
@@ -337,6 +344,9 @@ class DischmaSet_segmentation():
             if self.mode == 'train':
                 imglbl = torch.cat((i, l), dim=0)  # torch.Size([4, patch_size[0], patch_size[1]])
                 i, l = data_augmentation(imglbl, self.train_augmentation, self.gblur, self.normalize, self.coljit)
+            
+            else:
+                i = self.normalize(i)
 
             return i.float(), l.long()  # img.dtype: float, range 0 and 1 / lbl.dtype: long, either 0 or 1 or 2
 
@@ -366,13 +376,19 @@ if __name__=='__main__':
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
-    
-    x1 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='test')
-    x2 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='baseline')
+    x1 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='train')
+    x2 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='val')    
+    x3 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='test')
+    x4 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='baseline')
 
     #x1 = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_2'], mode='train')
 
+    i, l = x1.__getitem__(0)
     i, l = x2.__getitem__(0)
+    i, l = x3.__getitem__(0)
+    i, l = x4.__getitem__(0)
+
+
 
     x = DischmaSet_segmentation(root='../datasets/dataset_complete/', stat_cam_lst=['Buelenberg_1'])
     #for n in range(30, 100):

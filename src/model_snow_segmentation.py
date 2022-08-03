@@ -17,6 +17,8 @@ from torch.utils.data import DataLoader, random_split
 from torch import nn
 from torchvision import models
 from torch.optim import lr_scheduler
+from torchvision import transforms
+
 
 from dischma_set_segmentation import DischmaSet_segmentation
 
@@ -26,6 +28,8 @@ from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import warnings
 import rasterio
 from tqdm import tqdm
+
+import matplotlib
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 print('imports done')
@@ -299,6 +303,16 @@ def test_model(model):
 
         # save images from test set
         print('saving test images...')
+
+
+        # TODO: create function or make somehow nicer :)
+        x_denormalized = denormalize_fct(x)
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/full_y_pred_batchit_{batch_iteration[phase]}_cmap.png', y_pred_binary_data[0].cpu().detach(), cmap=cmap_pred)
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/full_y_true_batchit_{batch_iteration[phase]}_cmap.png', y[0].cpu().detach(), cmap=cmap_true)
+        plt.imsave(f'segmentation_visualizations/testing/full_x_denorm_batchit_{batch_iteration[phase]}.png', np.transpose(x_denormalized[0].cpu().detach().numpy(),(1,2,0)))
+
+
+        """
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_pred_batchit_{batch_iteration[phase]}.png', y_pred_binary_data[0].cpu().detach())
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_true_batchit_{batch_iteration[phase]}.png', y[0].cpu().detach())
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_x_batchit_{batch_iteration[phase]}.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
@@ -306,6 +320,7 @@ def test_model(model):
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_pred_batchit_{batch_iteration[phase]}.tiff', y_pred_binary_data[0].cpu().detach())
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_true_batchit_{batch_iteration[phase]}.tiff', y[0].cpu().detach())
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_x_batchit_{batch_iteration[phase]}.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+        """
 
         # STATS
         y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
@@ -446,26 +461,69 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 if epoch == num_epochs-1 and batch_iteration[phase]%len(dloader) == 1 and batch_iteration[phase] !=1 and phase == 'val':
                     # save patches in last validation loop:
                     print('saving validation images...')
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_01.png', y_pred_binary_data[0].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_01.png', y[0].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_01.png', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
+                    # note: after .float(), values would be 0.0, 1.0 and 2.0 -> save_image clip expect input between 0..1 -> clips 2 to 1  # therefore, do y/2 -> get 0.0, 0.5 and 1.0 -> nice plots  # TODO colormap
 
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_02.png', y_pred_binary_data[1].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_02.png', y[1].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_02.png', np.transpose(x[1].cpu().detach().numpy(),(1,2,0)))
+                    # TODO: create function or make somehow nicer :)
+                    x_denormalized = denormalize_fct(x[0])
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_1.png', y_pred_binary_data[0].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_1.png', y[0].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_1.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_03.png', y_pred_binary_data[2].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_03.png', y[2].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_03.png', np.transpose(x[2].cpu().detach().numpy(),(1,2,0)))
+                    x_denormalized = denormalize_fct(x[1])
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_2.png', y_pred_binary_data[1].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_2.png', y[1].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_2.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
 
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_04.png', y_pred_binary_data[3].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_04.png', y[3].cpu().detach())
-                    plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_04.png', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
+                    x_denormalized = denormalize_fct(x[2])
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_3.png', y_pred_binary_data[2].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_3.png', y[2].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_3.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
+
+                    x_denormalized = denormalize_fct(x[3])
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_4.png', y_pred_binary_data[3].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_4.png', y[3].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_4.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
+
+                    """
+                    to plot all from same batch in same image: sth like this, but with colormap - ev mpl alternative?
+                    for btch in x.shape[0]:
+                        f, axarr = plt.subplots(2,2)
+                        axarr[0,0].imshow(y_pred_binary_data[0].cpu().detach())
+                        axarr[0,1].imshow(y_pred_binary_data[1].cpu().detach())
+                        axarr[1,0].imshow(y_pred_binary_data[2].cpu().detach())
+                        axarr[1,1].imshow(y_pred_binary_data[3].cpu().detach())
+                        plt.savefig('patch_ypred_hstack.png')
+                    """
+
+
+
+                    """
+                    torchvision.utils.save_image(y_pred_binary_data.unsqueeze(1).float(), 'segmentation_visualizations/validation/patch_y_pred.png')
+                    torchvision.utils.save_image((y/2.).unsqueeze(1), 'segmentation_visualizations/validation/patch_y_true.png')
+                    torchvision.utils.save_image(x.float(), 'segmentation_visualizations/validation/patch_x.png')
+
+                    torchvision.utils.save_image(y_pred_binary_data[0], 'segmentation_visualizations/validation/patch_y_pred_01.png')
+                    torchvision.utils.save_image(y[0], 'segmentation_visualizations/validation/patch_y_true_01.png')
+                    torchvision.utils.save_image(x[0], 'segmentation_visualizations/validation/patch_x_01.png')
+
+                    torchvision.utils.save_image(y_pred_binary_data[1], 'segmentation_visualizations/validation/patch_y_pred_02.png')
+                    torchvision.utils.save_image(y[1], 'segmentation_visualizations/validation/patch_y_true_02.png')
+                    torchvision.utils.save_image(x[1], 'segmentation_visualizations/validation/patch_x_02.png')
+
+                    torchvision.utils.save_image(y_pred_binary_data[2], 'segmentation_visualizations/validation/patch_y_pred_03.png')
+                    torchvision.utils.save_image(y[2], 'segmentation_visualizations/validation/patch_y_true_03.png')
+                    torchvision.utils.save_image(x[2], 'segmentation_visualizations/validation/patch_x_03.png')
+
+                    torchvision.utils.save_image(y_pred_binary_data[3], 'segmentation_visualizations/validation/patch_y_pred_04.png')
+                    torchvision.utils.save_image(y[3], 'segmentation_visualizations/validation/patch_y_true_04.png')
+                    torchvision.utils.save_image(x[3], 'segmentation_visualizations/validation/patch_x_04.png')
+                    """
 
 
 
 
 
+                    """
                     plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_01.tiff', y_pred_binary_data[0].cpu().detach())
                     plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_01.tiff', y[0].cpu().detach())
                     plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_01.tiff', np.transpose(x[0].cpu().detach().numpy(),(1,2,0)))
@@ -481,6 +539,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_pred_04.tiff', y_pred_binary_data[3].cpu().detach())
                     plt.imsave('segmentation_pred_on_testset/large_patches/patch_y_true_04.tiff', y[3].cpu().detach())
                     plt.imsave('segmentation_pred_on_testset/large_patches/patch_x_04.tiff', np.transpose(x[3].cpu().detach().numpy(),(1,2,0)))
+                    """
 
 
                 # STATS
@@ -622,6 +681,15 @@ LOAD_MODEL = False
 
 LOG_EVERY = 20
 
+clist_pred = [(0, 'white'), (1, 'green')]
+clist_true = [(0, 'red'), (1./2., 'white'), (2./2., 'green')]
+
+cmap_pred = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_pred)
+cmap_true = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_true)
+
+mean_ImageNet = np.asarray([0.485, 0.456, 0.406])
+std_ImageNet = np.asarray([0.229, 0.224, 0.225])
+denormalize_fct = torchvision.transforms.Normalize((-1*mean_ImageNet/std_ImageNet), (1.0/std_ImageNet))
 
 ############ DATASETS AND DATALOADERS ############
 
@@ -694,6 +762,7 @@ out = model(x_try)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 0.4, 0.6]).to(device), reduction='mean')
 # use normal precision 
 criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 0.2, 0.8]).to(device), reduction='mean')
+criterion = nn.CrossEntropyLoss(weight=torch.Tensor([0, 1, 1]).to(device), reduction='mean')
 
 if OPTIM == 'SGD':
     optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY, momentum=MOMENTUM)
@@ -701,7 +770,7 @@ elif OPTIM == 'Adam':
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)  # weight_decay: It is used for adding the l2 penality to the loss (default = 0)
 
 if LR_SCHEDULER != 'None':
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.8)  # Decay LR by a factor of gamma every 'step_size' epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=int(LR_SCHEDULER), gamma=0.4)  # Decay LR by a factor of gamma every 'step_size' epochs
 elif LR_SCHEDULER == 'None':
     exp_lr_scheduler = None
 
@@ -715,3 +784,5 @@ print('start testing model...')
 
 
 test_model(model=model)
+
+print()
