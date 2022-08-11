@@ -213,14 +213,14 @@ class DischmaSet_classification():
         if image.shape[1:] != torch.Size([400, 600]):
             image = F.resize(img=image, size=(400, 600))
 
-        image = image/255  # convert to floats between 0 and 1  (normalization / standardization)
+        image = image/255  # convert to floats between 0 and 1  (normalization / standardization later)
 
         # transformations
         if self.mode == 'train':  # only do augmentation in training
             tf1 = self.train_augmentation(image)
         else:
             # tf1 = image
-            tf1 = self.val_test_augmentation(image)  # also normalize when val/testing
+            tf1 = self.val_test_augmentation(image)  # also normalized data for validation / testing (/baseline)
 
         """
         # test plots:
