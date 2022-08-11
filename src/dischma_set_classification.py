@@ -79,7 +79,7 @@ def check_thresholds(A0_img, fog_idx_img, A0_optim, fog_idx_optim, A0_far0, fog_
 
 class DischmaSet_classification():
 
-    def __init__(self, root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_1'], mode='train') -> None:
+    def __init__(self, root='../datasets/dataset_downsampled/', stat_cam_lst=['Buelenberg_1'], mode='train', normalize_on='imagenet') -> None:
 
         self.root = root
         self.stat_cam_lst = stat_cam_lst
@@ -95,18 +95,18 @@ class DischmaSet_classification():
         self.YEAR_TEST = '2020'
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-
-        self.denormalize = transforms.Compose(
-            [transforms.Normalize(mean= [0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
-            transforms.Normalize(mean= [-0.485, -0.456, -0.406], std=[1., 1., 1.])]
-        )  # ev not needed
+        
+        if normalize_on == 'imagenet':
+            self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            self.denormalize = transforms.Compose(
+                [transforms.Normalize(mean=[0., 0., 0.], std=[1/0.229, 1/0.224, 1/0.225]),
+                transforms.Normalize(mean=[-0.485, -0.456, -0.406], std=[1., 1., 1.])]
+            )  # ev not needed
 
         # rotation / affine transformations / random perspective probably make no sense (for one model per cam)
         # as camera installations will always be same (might make sense considering one model for multiple cameras)
         self.train_augmentation = transforms.RandomApply(torch.nn.ModuleList([
-            transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
+            # transforms.RandomCrop(size=(int(0.8*400), int(0.8*600))),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.GaussianBlur(kernel_size=3),
             transforms.ColorJitter(brightness=0.5, contrast=0.3, saturation=0.5, hue=0.3),  # as trees etc can change color over seasons
@@ -246,12 +246,13 @@ class DischmaSet_classification():
 
 if __name__=='__main__':
     
-    set1 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Luksch_2'], mode='train')
-    nclear, nfog = set1.get_balancedness()
-    img, lbl = set1.__getitem__(0)
-    
-    print('nfog, nclear: ', nfog, nclear)
-    print('total number of labeled images: ', set1.__len__())
+    set1 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Sattel_3'], mode='test')
+    set2 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Sattel_3'], mode='baseline')
+    # set3 = DischmaSet_classification(root='../datasets/dataset_downsampled/', stat_cam_lst=['Sattel_3'], mode='train')
+    # img, lbl = set3.__getitem__(10)
+    print()
+    # nclear, nfog = set1.get_balancedness()
+    # img, lbl = set1.__getitem__(0)
 
-    
-    
+    # print('nfog, nclear: ', nfog, nclear)
+    # print('total number of labeled images: ', set1.__len__())

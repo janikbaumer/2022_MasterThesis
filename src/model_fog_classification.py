@@ -463,9 +463,12 @@ parser.add_argument('--weighted', help='how to weight the classes (manual: as gi
 parser.add_argument('--path_dset', help='path to used dataset ')
 parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and if so after how many epochs to reduced LR')
 parser.add_argument('--model', help='choose model type')
+parser.add_argument('--resnet_layers', type=int, help='choose depth of resnet')
 parser.add_argument('--optim', help='set type of optimizer (Adam or SGD)')
 parser.add_argument('--weight_decay', type=float, help='set weight decay (used for Adam and for SGD')
 parser.add_argument('--momentum', type=float, help='set momentum used for SGD optimizer')
+parser.add_argument('--normalization', help='what values to normalize with (imagenet or own trainset')
+
 
 args = parser.parse_args()
 
@@ -485,9 +488,11 @@ WEIGHTED = args.weighted
 PATH_DATASET = args.path_dset
 LR_SCHEDULER = args.lr_scheduler
 MODEL_TYPE = args.model
+RESNET_LAYERS = args.resnet_layers
 OPTIM = args.optim
 WEIGHT_DECAY = args.weight_decay
 MOMENTUM = args.momentum
+NORM_BASED_ON = args.normalization  # not needed, to be adapted manually in dischma_set_classification
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
@@ -577,7 +582,12 @@ elif WEIGHTED == 'Auto':
 
 if MODEL_TYPE == 'resnet':
     # should work
-    model = models.resnet50(pretrained=True)
+    if RESNET_LAYERS == 18:
+        model = models.resnet18(pretrained=True)
+    if RESNET_LAYERS == 50:
+        model = models.resnet50(pretrained=True)
+    if RESNET_LAYERS == 101:
+        model = models.resnet101(pretrained=True)
     n_features = model.fc.in_features  # adapt fully connected layer
     model.fc = nn.Linear(n_features, N_CLASSES)  # note: Softmax (from real to probab) is implicitly applied when working with crossentropyloss
 
