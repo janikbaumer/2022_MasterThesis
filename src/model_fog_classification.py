@@ -467,7 +467,7 @@ parser.add_argument('--resnet_layers', type=int, help='choose depth of resnet')
 parser.add_argument('--optim', help='set type of optimizer (Adam or SGD)')
 parser.add_argument('--weight_decay', type=float, help='set weight decay (used for Adam and for SGD')
 parser.add_argument('--momentum', type=float, help='set momentum used for SGD optimizer')
-parser.add_argument('--normalization', help='what values to normalize with (imagenet or own trainset')
+parser.add_argument('--normalization_on', help='what values to normalize with (imagenet or own trainset')
 
 
 args = parser.parse_args()
@@ -492,7 +492,7 @@ RESNET_LAYERS = args.resnet_layers
 OPTIM = args.optim
 WEIGHT_DECAY = args.weight_decay
 MOMENTUM = args.momentum
-NORM_BASED_ON = args.normalization  # not needed, to be adapted manually in dischma_set_classification
+NORM_BASED_ON = args.normalization_on  # not needed, to be adapted manually in dischma_set_classification
 
 STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
