@@ -38,6 +38,7 @@ def get_manual_label_or_None(path_to_file, file):
     get the label from the text file with the manual classifications (from script handlabelling_raw.py)
     if file has not been labeled, then return None
     """
+    file = file[:-4] + '.png'
     full_path_manual_labels = os.path.join(path_to_file, 'manual_labels_isfoggy.txt')
     if not os.path.isfile(full_path_manual_labels):
         return None
@@ -209,9 +210,9 @@ class DischmaSet_classification():
             shp_new = tuple(int(x/self.DOWNSCALE_FACTOR) for x in shp)
             image = F.resize(img=image, size=shp_new)
         
-        # ensure shape is actually (400x600)
-        if image.shape[1:] != torch.Size([400, 600]):
-            image = F.resize(img=image, size=(400, 600))
+        # ensure shape is actually (400x600) TODO rm on euler
+        #if image.shape[1:] != torch.Size([400, 600]):
+        #    image = F.resize(img=image, size=(400, 600))
 
         image = image/255  # convert to floats between 0 and 1  (normalization / standardization later)
 
