@@ -211,8 +211,8 @@ class DischmaSet_classification():
             image = F.resize(img=image, size=shp_new)
         
         # ensure shape is actually (400x600) TODO rm on euler
-        #if image.shape[1:] != torch.Size([400, 600]):
-        #    image = F.resize(img=image, size=(400, 600))
+        if image.shape[1:] != torch.Size([400, 600]):
+            image = F.resize(img=image, size=(400, 600))
 
         image = image/255  # convert to floats between 0 and 1  (normalization / standardization later)
 
