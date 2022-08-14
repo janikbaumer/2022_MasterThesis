@@ -528,8 +528,14 @@ BASELINES = {
     "['Stillberg_3']":{'PRECISION': 0.393, 'RECALL': 0.932},
     "['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']" : {'PRECISION': 0.398, 'RECALL': 0.83}
 }
-PRECISION_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['PRECISION']
-RECALL_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['RECALL']
+
+if str(STATIONS_CAM_LST) in BASELINES.keys():
+    PRECISION_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['PRECISION']
+    RECALL_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['RECALL']
+else:
+    PRECISION_BASELINE = 0
+    RECALL_BASELINE = 0
+
 
 ############ DATASETS AND DATALOADERS ############
 
