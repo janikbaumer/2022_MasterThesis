@@ -220,8 +220,8 @@ class DischmaSet_classification():
         if self.mode == 'train':  # only do augmentation in training
             tf1 = self.train_augmentation(image)
         else:
-            tf1 = image
-            # tf1 = self.val_test_augmentation(image)  # also normalized data for validation / testing (/baseline)
+            # tf1 = image
+            tf1 = self.val_test_augmentation(image)  # also normalized data for validation / testing (/baseline)
 
         """
         # test plots:
