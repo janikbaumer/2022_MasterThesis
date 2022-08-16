@@ -132,54 +132,71 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
 
             # get optimal metrics
             opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
-            prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
-            prec_MatchRec, rec_MatchRec, f1_MatchRec, thresh_MatchRec = getmetrics_matchRec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
-
             global OPTIMAL_THRESHOLD  # where best f1-score is achieved
             OPTIMAL_THRESHOLD = opt_thresh  # after last loop, this variable can be taken for test set threshold (as other fct-call, make variable global), is used is test-function
-            global THRESHOLD_MATCHPREC
-            THRESHOLD_MATCHPREC = thresh_MatchPrec
-            global THRESHOLD_MATCHREC
-            THRESHOLD_MATCHREC = thresh_MatchRec
 
-            wandb.log({
-            'n_epoch' : ep,
-            'batch_iteration' : bi,
-            f'{ph}/loss' : batch_it_loss,
-            f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+            
+            if PRECISION_BASELINE and RECALL_BASELINE:
+                prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+                prec_MatchRec, rec_MatchRec, f1_MatchRec, thresh_MatchRec = getmetrics_matchRec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+        
+                global THRESHOLD_MATCHPREC
+                THRESHOLD_MATCHPREC = thresh_MatchPrec
+                global THRESHOLD_MATCHREC
+                THRESHOLD_MATCHREC = thresh_MatchRec
 
-            f'{ph}/threshold_standard/accuracy' : acc_std,
-            f'{ph}/threshold_standard/precision' : prec_std,
-            f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
-            f'{ph}/threshold_standard/F1-score' : f1_std,
-            f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+                wandb.log({
+                'n_epoch' : ep,
+                'batch_iteration' : bi,
+                f'{ph}/loss' : batch_it_loss,
+                f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
 
-            f'{ph}/threshold_optimal/precision' : opt_prec,
-            f'{ph}/threshold_optimal/recall' : opt_rec,
-            f'{ph}/threshold_optimal/f1-score' : opt_f1,
-            f'{ph}/threshold_optimal/threshold_opt' : opt_thresh,
+                f'{ph}/threshold_standard/accuracy' : acc_std,
+                f'{ph}/threshold_standard/precision' : prec_std,
+                f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/threshold_standard/F1-score' : f1_std,
+                f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
 
-            f'{ph}/threshold_MatchPrec/precision' : prec_MatchPrec,
-            f'{ph}/threshold_MatchPrec/recall' : rec_MatchPrec,
-            f'{ph}/threshold_MatchPrec/f1-score' : f1_MatchPrec,
-            f'{ph}/threshold_MatchPrec/threshold_opt' : thresh_MatchPrec,
+                f'{ph}/threshold_optimal/precision' : opt_prec,
+                f'{ph}/threshold_optimal/recall' : opt_rec,
+                f'{ph}/threshold_optimal/f1-score' : opt_f1,
+                f'{ph}/threshold_optimal/threshold_opt' : opt_thresh,
 
-            f'{ph}/threshold_MatchRec/precision' : prec_MatchRec,
-            f'{ph}/threshold_MatchRec/recall' : rec_MatchRec,
-            f'{ph}/threshold_MatchRec/f1-score' : f1_MatchRec,
-            f'{ph}/threshold_MatchRec/threshold_opt' : thresh_MatchRec,
+                f'{ph}/threshold_MatchPrec/precision' : prec_MatchPrec,
+                f'{ph}/threshold_MatchPrec/recall' : rec_MatchPrec,
+                f'{ph}/threshold_MatchPrec/f1-score' : f1_MatchPrec,
+                f'{ph}/threshold_MatchPrec/threshold_opt' : thresh_MatchPrec,
 
-            })
+                f'{ph}/threshold_MatchRec/precision' : prec_MatchRec,
+                f'{ph}/threshold_MatchRec/recall' : rec_MatchRec,
+                f'{ph}/threshold_MatchRec/f1-score' : f1_MatchRec,
+                f'{ph}/threshold_MatchRec/threshold_opt' : thresh_MatchRec,
+
+                })
+
+            else:  # if baselines do not exist (e.g. transferability learning, when test set consists of multiple cameras)
+                opt_prec, opt_rec, opt_f1, opt_thresh, prtable
+                wandb.log({
+                'n_epoch' : ep,
+                'batch_iteration' : bi,
+                f'{ph}/loss' : batch_it_loss,
+                f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+
+                f'{ph}/threshold_standard/accuracy' : acc_std,
+                f'{ph}/threshold_standard/precision' : prec_std,
+                f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/threshold_standard/F1-score' : f1_std,
+                f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+
+                f'{ph}/threshold_optimal/precision' : opt_prec,
+                f'{ph}/threshold_optimal/recall' : opt_rec,
+                f'{ph}/threshold_optimal/f1-score' : opt_f1,
+                f'{ph}/threshold_optimal/threshold_opt' : opt_thresh,
+                })
 
         if ph == 'test':
             # for predictions with optimal threshold: using optimal threshold from last validation loop
 
-            # get predictions with th matchPrecision:
-            prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
-
-            # get predictions with th matchRecall:
-            prec_MatchRec, rec_MatchRec, f1_MatchRec, thresh_MatchRec = getmetrics_matchRec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
-            
             # if th_opt is got from last validation loop
             th_opt = torch.tensor([OPTIMAL_THRESHOLD]).to(device)
             pred_binary_th_optimal = (yprobab_pos > th_opt).float().cpu().tolist()  # threshold: last from validation # either 0 or 1 / shape: batchsize (8)
@@ -189,35 +206,62 @@ def get_and_log_metrics(yt, ypred_th_std, ylogits, ep, batch_it_loss, ph, bi=0, 
             rec_optimal = recall_score(y_true=yt, y_pred=pred_binary_th_optimal)
             f1_optimal = f1_score(y_true=yt, y_pred=pred_binary_th_optimal)
 
-            wandb.log({
-            'n_epoch' : ep,
-            'batch_iteration' : bi,
-            f'{ph}/loss' : batch_it_loss,
-            # f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
-
-            f'{ph}/threshold_standard/accuracy' : acc_std,
-            f'{ph}/threshold_standard/precision' : prec_std,
-            f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
-            f'{ph}/threshold_standard/F1-score' : f1_std,
-            f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+            if PRECISION_BASELINE and RECALL_BASELINE:
+                # get predictions with th matchPrecision:
+                prec_MatchPrec, rec_MatchPrec, f1_MatchPrec, thresh_MatchPrec = getmetrics_matchPrec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
+                # get predictions with th matchRecall:
+                prec_MatchRec, rec_MatchRec, f1_MatchRec, thresh_MatchRec = getmetrics_matchRec(ytrue=yt, yprob_pos=yprobab_pos.cpu().detach())
             
-            f'{ph}/threshold_optimal/accuracy' : acc_optimal,
-            f'{ph}/threshold_optimal/precision' : prec_optimal,
-            f'{ph}/threshold_optimal/recall' : rec_optimal,
-            f'{ph}/threshold_optimal/f1-score' : f1_optimal,
-            f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD,
+                
+                wandb.log({
+                'n_epoch' : ep,
+                'batch_iteration' : bi,
+                f'{ph}/loss' : batch_it_loss,
+                # f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
 
-            f'{ph}/threshold_MatchPrec/precision' : prec_MatchPrec,
-            f'{ph}/threshold_MatchPrec/recall' : rec_MatchPrec,
-            f'{ph}/threshold_MatchPrec/f1-score' : f1_MatchPrec,
-            f'{ph}/threshold_MatchPrec/threshold_opt' : thresh_MatchPrec,
+                f'{ph}/threshold_standard/accuracy' : acc_std,
+                f'{ph}/threshold_standard/precision' : prec_std,
+                f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/threshold_standard/F1-score' : f1_std,
+                f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+                
+                f'{ph}/threshold_optimal/accuracy' : acc_optimal,
+                f'{ph}/threshold_optimal/precision' : prec_optimal,
+                f'{ph}/threshold_optimal/recall' : rec_optimal,
+                f'{ph}/threshold_optimal/f1-score' : f1_optimal,
+                f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD,
 
-            f'{ph}/threshold_MatchRec/precision' : prec_MatchRec,
-            f'{ph}/threshold_MatchRec/recall' : rec_MatchRec,
-            f'{ph}/threshold_MatchRec/f1-score' : f1_MatchRec,
-            f'{ph}/threshold_MatchRec/threshold_opt' : thresh_MatchRec,
+                f'{ph}/threshold_MatchPrec/precision' : prec_MatchPrec,
+                f'{ph}/threshold_MatchPrec/recall' : rec_MatchPrec,
+                f'{ph}/threshold_MatchPrec/f1-score' : f1_MatchPrec,
+                f'{ph}/threshold_MatchPrec/threshold_opt' : thresh_MatchPrec,
 
-            })
+                f'{ph}/threshold_MatchRec/precision' : prec_MatchRec,
+                f'{ph}/threshold_MatchRec/recall' : rec_MatchRec,
+                f'{ph}/threshold_MatchRec/f1-score' : f1_MatchRec,
+                f'{ph}/threshold_MatchRec/threshold_opt' : thresh_MatchRec,
+
+                })
+            
+            else:  # if baseline does not exist, only log optimal metrics (with optimal f1-score)
+                wandb.log({
+                'n_epoch' : ep,
+                'batch_iteration' : bi,
+                f'{ph}/loss' : batch_it_loss,
+                # f'{ph}/PR_Curve' : wandb.plot.line(prtable, 'Precision', 'Recall', title='PR-Curve'),
+
+                f'{ph}/threshold_standard/accuracy' : acc_std,
+                f'{ph}/threshold_standard/precision' : prec_std,
+                f'{ph}/threshold_standard/recall' : rec_std,  # this should be high !!! (to catch all foggy images)
+                f'{ph}/threshold_standard/F1-score' : f1_std,
+                f'{ph}/threshold_standard/conf_mat' : wandb.plot.confusion_matrix(y_true=yt, preds=ypred_th_std, class_names=['class 0 (not foggy)', 'class 1 (foggy)']),
+                
+                f'{ph}/threshold_optimal/accuracy' : acc_optimal,
+                f'{ph}/threshold_optimal/precision' : prec_optimal,
+                f'{ph}/threshold_optimal/recall' : rec_optimal,
+                f'{ph}/threshold_optimal/f1-score' : f1_optimal,
+                f'{ph}/threshold_optimal/threshold_opt' : OPTIMAL_THRESHOLD,
+                })
 
         print('logging complete.')
 
@@ -533,8 +577,8 @@ if str(STATIONS_CAM_LST) in BASELINES.keys():
     PRECISION_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['PRECISION']
     RECALL_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['RECALL']
 else:
-    PRECISION_BASELINE = 0
-    RECALL_BASELINE = 0
+    PRECISION_BASELINE = None
+    RECALL_BASELINE = None
 
 
 ############ DATASETS AND DATALOADERS ############
@@ -583,7 +627,7 @@ elif WEIGHTED == 'Manual':
 elif WEIGHTED == 'Auto':
     n_class_0, n_class_1 = dset_train.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
-    w0, w1 = n_class_1/n_tot, n_class_0/n_tot
+    w0, w1 = n_class_0/n_tot, n_class_1/n_tot
     weights = torch.Tensor([w0, w1]).to(device)
 
 if MODEL_TYPE == 'resnet':
