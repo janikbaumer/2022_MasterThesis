@@ -573,10 +573,10 @@ BASELINES = {
     "['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']" : {'PRECISION': 0.398, 'RECALL': 0.83}
 }
 
-if str(STATIONS_CAM_LST) in BASELINES.keys():
-    PRECISION_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['PRECISION']
-    RECALL_BASELINE = BASELINES[str(STATIONS_CAM_LST)]['RECALL']
-else:
+if str(TEST_ON_DSET_STR) in BASELINES.keys():
+    PRECISION_BASELINE = BASELINES[str(TEST_ON_DSET_STR)]['PRECISION']
+    RECALL_BASELINE = BASELINES[str(TEST_ON_DSET_STR)]['RECALL']
+else:  # if tested only on some cameras
     PRECISION_BASELINE = None
     RECALL_BASELINE = None
 
