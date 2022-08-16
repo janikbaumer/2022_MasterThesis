@@ -627,7 +627,7 @@ elif WEIGHTED == 'Manual':
 elif WEIGHTED == 'Auto':
     n_class_0, n_class_1 = dset_train.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
-    w0, w1 = n_class_0/n_tot, n_class_1/n_tot
+    w0, w1 = n_class_1/n_tot, n_class_0/n_tot
     weights = torch.Tensor([w0, w1]).to(device)
 
 if MODEL_TYPE == 'resnet':
