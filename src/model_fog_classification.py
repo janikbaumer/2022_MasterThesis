@@ -623,7 +623,7 @@ print(f'for test set: {dset_test.get_balancedness()}')
 if WEIGHTED == 'False':
     weights = None
 elif WEIGHTED == 'Manual':
-    weights = torch.Tensor([0.2, 0.8]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
+    weights = torch.Tensor([0.02, 0.98]).to(device)  # w0 smaller, w1 larger because we want a high recall (only few FN) - when we predict a negative, we must be sure that it is negative (sunny)
 elif WEIGHTED == 'Auto':
     n_class_0, n_class_1 = dset_train.get_balancedness()  # balancedness from full dataset, not only from train - but should have similar distribution
     n_tot = n_class_0 + n_class_1
