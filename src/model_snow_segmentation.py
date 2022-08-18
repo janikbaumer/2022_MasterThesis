@@ -317,8 +317,8 @@ def test_model(model):
         # error_image[y_pred_binary_data != y] = 1
         # error_image[y_pred_binary_data == y] = 2
 
-        y_true_plot = y[0]
-        y_pred_plot = y_pred_binary_data[0]
+        y_true_plot = y[0].clone().detach()
+        y_pred_plot = y_pred_binary_data[0].clone().detach()
 
         y_pred_plot[y_pred_plot == 1] = 2
         y_pred_plot[y_pred_plot == 0] = 1
