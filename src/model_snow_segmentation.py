@@ -306,10 +306,31 @@ def test_model(model):
 
 
         # TODO: create function or make somehow nicer :)
+
+
+        #   use same mask that is used in GT also in prediction
+        # y_pred_binary_data[y_pred_binary_data == 1] = 2
+        # y_pred_binary_data[y_pred_binary_data == 0] = 1
+        # y_pred_binary_data[y == 0] = 0  # use same mask
+
+        # error_image = y_pred_binary_data
+        # error_image[y_pred_binary_data != y] = 1
+        # error_image[y_pred_binary_data == y] = 2
+
+        y_true_plot = y[0]
+        y_pred_plot = y_pred_binary_data[0]
+
+        y_pred_plot[y_pred_plot == 1] = 2
+        y_pred_plot[y_pred_plot == 0] = 1
+        y_pred_plot[y_true_plot == 0] = 0
+
+
+
         x_denormalized = denormalize_fct(x)
-        matplotlib.image.imsave(f'segmentation_visualizations/testing/full_y_pred_batchit_{batch_iteration[phase]}_cmap.png', y_pred_binary_data[0].cpu().detach(), cmap=cmap_pred)
-        matplotlib.image.imsave(f'segmentation_visualizations/testing/full_y_true_batchit_{batch_iteration[phase]}_cmap.png', y[0].cpu().detach(), cmap=cmap_true)
-        plt.imsave(f'segmentation_visualizations/testing/full_x_denorm_batchit_{batch_iteration[phase]}.png', np.transpose(x_denormalized[0].cpu().detach().numpy(),(1,2,0)))
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_y_pred_batchit_{batch_iteration[phase]}_cmap.png', y_pred_plot.cpu().detach(), cmap=cmap_true)
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_y_true_batchit_{batch_iteration[phase]}_cmap.png', y_true_plot.cpu().detach(), cmap=cmap_true)
+        # matplotlib.image.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_error_batchit_{batch_iteration[phase]}_cmap.png', error_image[0].cpu().detach(), cmap=cmap_error)        
+        plt.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_x_denorm_batchit_{batch_iteration[phase]}.png', np.transpose(x_denormalized[0].cpu().detach().numpy(),(1,2,0)))
 
 
         """
@@ -463,27 +484,29 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     print('saving validation images...')
                     # note: after .float(), values would be 0.0, 1.0 and 2.0 -> save_image clip expect input between 0..1 -> clips 2 to 1  # therefore, do y/2 -> get 0.0, 0.5 and 1.0 -> nice plots  # TODO colormap
 
+                    """ do not plot validation patches (test patches will be plotted later)
                     # TODO: create function or make somehow nicer :)
                     x_denormalized = denormalize_fct(x[0])
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_1.png', y_pred_binary_data[0].cpu().detach(), cmap=cmap_pred)
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_1.png', y[0].cpu().detach(), cmap=cmap_true)
-                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_1.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_pred_cmap_1.png', y_pred_binary_data[0].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_true_cmap_1.png', y[0].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_x_denorm_batchit_1.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
 
                     x_denormalized = denormalize_fct(x[1])
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_2.png', y_pred_binary_data[1].cpu().detach(), cmap=cmap_pred)
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_2.png', y[1].cpu().detach(), cmap=cmap_true)
-                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_2.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_pred_cmap_2.png', y_pred_binary_data[1].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_true_cmap_2.png', y[1].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_x_denorm_batchit_2.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
 
                     x_denormalized = denormalize_fct(x[2])
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_3.png', y_pred_binary_data[2].cpu().detach(), cmap=cmap_pred)
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_3.png', y[2].cpu().detach(), cmap=cmap_true)
-                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_3.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_pred_cmap_3.png', y_pred_binary_data[2].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_true_cmap_3.png', y[2].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_x_denorm_batchit_3.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
 
                     x_denormalized = denormalize_fct(x[3])
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_pred_cmap_4.png', y_pred_binary_data[3].cpu().detach(), cmap=cmap_pred)
-                    matplotlib.image.imsave('segmentation_visualizations/validation/patch_y_true_cmap_4.png', y[3].cpu().detach(), cmap=cmap_true)
-                    plt.imsave(f'segmentation_visualizations/validation/patch_x_denorm_batchit_4.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
-
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_pred_cmap_4.png', y_pred_binary_data[3].cpu().detach(), cmap=cmap_pred)
+                    matplotlib.image.imsave('segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_y_true_cmap_4.png', y[3].cpu().detach(), cmap=cmap_true)
+                    plt.imsave(f'segmentation_visualizations/validation/{TEST_ON_DSET_LST}_patch_x_denorm_batchit_4.png', np.transpose(x_denormalized.cpu().detach().numpy(),(1,2,0)))
+                    """
+                    
                     """
                     to plot all from same batch in same image: sth like this, but with colormap - ev mpl alternative?
                     for btch in x.shape[0]:
@@ -637,6 +660,7 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--epochs', type=int, help='number of training epochs')
 parser.add_argument('--train_split', type=float, help='train split')
 parser.add_argument('--stations_cam', help='list of stations with camera number, separated with underscore (e.g. Buelenberg_1')
+parser.add_argument('--test_on_dset', help='if None, test on same set as model was trained - this variable is to make sure a model can be tested on single cam if trained on all cams')
 parser.add_argument('--weighted', help='how to weight the classes (manual: as given in script / Auto: Inversely proportional to occurance / False: not at all')
 parser.add_argument('--path_dset', help='path to used dataset ')
 parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and if so after how many epochs to reduced LR')
@@ -670,10 +694,15 @@ STATIONS_CAM_STR = args.stations_cam
 STATIONS_CAM_STR = STATIONS_CAM_STR.replace("\\", "")
 STATIONS_CAM_LST = sorted(ast.literal_eval(STATIONS_CAM_STR))  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
 
+TEST_ON_DSET_STR = args.test_on_dset
+TEST_ON_DSET_STR = TEST_ON_DSET_STR.replace("\\", "")
+TEST_ON_DSET_LST = ast.literal_eval(TEST_ON_DSET_STR)  # sort to make sure not two models with data from same cameras (but input in different order) will be saved
+
+
 N_CLASSES = 3
 BETA = 1
 EPSILON = 0
-PATH_MODEL = f'models/segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}_optim_{OPTIM}'
+PATH_MODEL = f'models_segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_lr_sched_{LR_SCHEDULER}_optim_{OPTIM}'
 
 #PATH_LOAD_MODEL = f'final_models_classification_v01/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 PATH_LOAD_MODEL = PATH_MODEL
@@ -683,9 +712,12 @@ LOG_EVERY = 20
 
 clist_pred = [(0, 'white'), (1, 'green')]
 clist_true = [(0, 'red'), (1./2., 'white'), (2./2., 'green')]
+clist_error = [(0, 'white'), (1./2., 'orange'), (2./2., 'blue')]
 
 cmap_pred = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_pred)
 cmap_true = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_true)
+cmap_error = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_error)
+
 
 mean_ImageNet = np.asarray([0.485, 0.456, 0.406])
 std_ImageNet = np.asarray([0.229, 0.224, 0.225])
@@ -695,8 +727,14 @@ denormalize_fct = torchvision.transforms.Normalize((-1*mean_ImageNet/std_ImageNe
 
 # create datasets and dataloaders, split in train and validation set
 dset_train = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='train')
-dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
-dset_test = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
+
+if not TEST_ON_DSET_LST:
+    dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='val')
+    dset_test = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode='test')
+
+else:  # a list is given to eval test set on 
+    dset_val = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=TEST_ON_DSET_LST, mode='val')
+    dset_test = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=TEST_ON_DSET_LST, mode='test')
 
 # dset_full = DischmaSet_segmentation(root=PATH_DATASET, stat_cam_lst=STATIONS_CAM_LST, mode=None)
 # dset_train, dset_val = random_split(dset_full, (int(len(dset_full)*TRAIN_SPLIT), math.ceil(len(dset_full)*(1-TRAIN_SPLIT))))
