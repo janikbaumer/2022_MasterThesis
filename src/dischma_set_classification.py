@@ -33,12 +33,16 @@ def get_indices_or_None(path, raw_img):
     return a_0, fog_index
 
 
-def get_manual_label_or_None(path_to_file, file):
+def get_manual_label_or_None(path_to_file, file, task='classification'):
     """
     get the label from the text file with the manual classifications (from script handlabelling_raw.py)
     if file has not been labeled, then return None
     """
-    file = file[:-4] + '.png'
+    if task == 'classification':
+        file = file[:-4] + '.png'
+    elif task == 'segmentation':
+        file = file[:-4] + '.jpg'
+
     full_path_manual_labels = os.path.join(path_to_file, 'manual_labels_isfoggy.txt')
     if not os.path.isfile(full_path_manual_labels):
         return None
@@ -144,7 +148,7 @@ class DischmaSet_classification():
                 if self.mode == 'train' and raw_img_name[0:4] in self.YEAR_TRAIN_VAL and raw_img_name[6:8] in self.DAYS_TRAIN:
                     # training data is manually labelled from 2021 (from 1st to 24th)
                     if os.path.isfile(self.full_path_manual_labels):
-                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name, task='classification')
                         if img_is_foggy is not None:
                             self.is_foggy.append(int(img_is_foggy))
                             self.path_list_valid.append(full_path_img)
@@ -153,7 +157,7 @@ class DischmaSet_classification():
                     # validation data is manually labelled from 2021 (from 25th to end (28th/30th/31st))
                     # note: same code snippet as above
                     if os.path.isfile(self.full_path_manual_labels):
-                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name, task='classification')
                         if img_is_foggy is not None:
                             self.is_foggy.append(int(img_is_foggy))
                             self.path_list_valid.append(full_path_img)
@@ -164,7 +168,7 @@ class DischmaSet_classification():
                     A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)
                     if not (A0_img == None and fog_idx_img == None):  # if txt file for composite image generation exists and contains row with name of image)
                         if os.path.isfile(self.full_path_manual_labels):
-                            img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                            img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name, task='classification')
                             if img_is_foggy is not None:
                                 self.is_foggy.append(int(img_is_foggy))
                                 self.path_list_valid.append(full_path_img)
@@ -174,7 +178,7 @@ class DischmaSet_classification():
                         # for each jpg/png file, get indices, compare to camera thresholds
                         # and check whether img was used for composite image generation (if yes: not foggy (class 0) / if no: foggy (class 1))
                     if os.path.isfile(self.full_path_manual_labels):
-                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name)
+                        img_is_foggy = get_manual_label_or_None(path_to_file=self.PATH_RAW_IMAGE, file=raw_img_name, task='classification')
                         if img_is_foggy is not None:
                             
                             A0_img, fog_idx_img = get_indices_or_None(path=self.PATH_COMPOSITE, raw_img=raw_img_name)

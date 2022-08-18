@@ -106,7 +106,7 @@ def get_nonfoggy(lst, path):
     nonfoggy = []
     for ele in lst:
         img = ele.split('/')[-1]
-        img_is_foggy = get_manual_label_or_None(path_to_file=path, file=img)
+        img_is_foggy = get_manual_label_or_None(path_to_file=path, file=img, task='segmentation')
         if img_is_foggy == 0:
             nonfoggy.append(ele)
 
