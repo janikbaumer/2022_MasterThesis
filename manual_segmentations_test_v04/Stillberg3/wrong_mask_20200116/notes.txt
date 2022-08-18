@@ -1,0 +1,1 @@
+_iso looks good, but used mask does not (normal tif file)
