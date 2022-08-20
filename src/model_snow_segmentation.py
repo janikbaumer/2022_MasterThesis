@@ -1,3 +1,4 @@
+from xml.dom.pulldom import END_ELEMENT
 import torch
 import torchvision
 import argparse
@@ -767,9 +768,17 @@ print(f'for test set: {dset_test.get_balancedness()}')
 
 ############ MODEL, LOSS, OPTIMIZER, SCHEDULER  ############
 
+if ENCODER_DEPTH == 5:
+    DEC_CHANNEL_LIST = (256, 128, 64, 32, 16)
+elif ENCODER_DEPTH == 4:
+    DEC_CHANNEL_LIST = (256, 128, 64, 32)
+elif ENCODER_DEPTH == 3:
+    DEC_CHANNEL_LIST = (256, 128, 64)
+
 model = smp.Unet(
     encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
     encoder_depth=ENCODER_DEPTH,    # number of stages used in encoder in range [3, 5]: default: 5
+    decoder_channels=DEC_CHANNEL_LIST,   # len depends on encoder depth
     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
     classes=N_CLASSES,              # model output channels (number of classes in your dataset)
