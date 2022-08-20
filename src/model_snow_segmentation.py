@@ -667,6 +667,7 @@ parser.add_argument('--lr_scheduler', help='whether to use a lr scheduler, and i
 parser.add_argument('--optim', help='set type of optimizer (Adam or SGD)')
 parser.add_argument('--weight_decay', type=float, help='set weight decay (used for Adam and for SGD')
 parser.add_argument('--momentum', type=float, help='set momentum used for SGD optimizer')
+parser.add_argument('--encoder_depth', type=int, help='encoder depth for U-Net')
 
 args = parser.parse_args()
 
@@ -688,6 +689,8 @@ LR_SCHEDULER = args.lr_scheduler
 OPTIM = args.optim
 WEIGHT_DECAY = args.weight_decay
 MOMENTUM = args.momentum
+ENCODER_DEPTH = args.encoder_depth
+
 # WEIGHTED = args.weighted
 
 STATIONS_CAM_STR = args.stations_cam
@@ -766,6 +769,7 @@ print(f'for test set: {dset_test.get_balancedness()}')
 
 model = smp.Unet(
     encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+    encoder_depth=ENCODER_DEPTH,    # number of stages used in encoder in range [3, 5]: default: 5
     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
     classes=N_CLASSES,              # model output channels (number of classes in your dataset)
