@@ -771,9 +771,9 @@ print(f'for test set: {dset_test.get_balancedness()}')
 if ENCODER_DEPTH == 5:
     DEC_CHANNEL_LIST = (256, 128, 64, 32, 16)
 elif ENCODER_DEPTH == 4:
-    DEC_CHANNEL_LIST = (256, 128, 64, 32)
+    DEC_CHANNEL_LIST = (128, 64, 32, 16)
 elif ENCODER_DEPTH == 3:
-    DEC_CHANNEL_LIST = (256, 128, 64)
+    DEC_CHANNEL_LIST = (64, 32, 16)
 
 model = smp.Unet(
     encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
