@@ -172,7 +172,7 @@ class DischmaSet_segmentation():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.original_shape = (4000, 6000)  # shape of images - hardcoded, so image metadata not needed to be read everytime
-        self.patch_size = (256*4, 256*4)  # (256*8, 256*8) for clearly visible images
+        self.patch_size = (256*2, 256*2)  # (256*8, 256*8) for clearly visible images
         if self.patch_size[0]%32 != 0 or self.patch_size[1]%32 != 0: # for Unet, make sure both dims are divisible by 32 !!!
             print('Warning: patch size must be divisible by 32 in both dimensions !')
             print('check variable self.patch_size (DischmaSet_segmentation.__init__()')
@@ -376,6 +376,7 @@ if __name__=='__main__':
     all = ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']
     some = ['Sattel_1', 'Stillberg_1', 'Stillberg_2', 'Buelenberg_1']
 
+    x0 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Stillberg_3'], mode='test')
     x1 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='train')
     x2 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='val')    
     x3 = DischmaSet_segmentation(root="/net/pf-pc20/scratch2/jbaumer/2022_MasterThesis/datasets/dataset_complete/", stat_cam_lst=['Buelenberg_2'], mode='test')
