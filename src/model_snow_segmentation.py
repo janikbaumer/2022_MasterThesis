@@ -147,7 +147,7 @@ def get_and_log_metrics(yt, yt_short, ypred_bin, ypred_logits, ep, batch_it_loss
             # also get optimal threshold
 
             # get optimal metrics
-            # here, only every 1000th element is taken (for yt_short and yprob_pob)
+            # here, only every 100th element is taken (for yt_short and yprob_pob)
             opt_prec, opt_rec, opt_f1, opt_thresh, prtable = get_optimal_prec_rec_f1_th_and_prtable(ytrue=yt_short.cpu().detach(), yprob_pos=y_probab_pos.cpu().detach())
 
             global OPTIMAL_THRESHOLD  # where best f1-score is achieved
@@ -363,15 +363,15 @@ def test_model(model):
         y_pred_logits_snow_flat = y_pred_logits_snow_flat[y_true_flat != 0]
         y_pred_logits_nosnow_flat = y_pred_logits_nosnow_flat[y_true_flat != 0]
 
-        y_pred_logits_snow_flat_selection = y_pred_logits_snow_flat[::1000]  # use only every 1000th element, to avoid memory issues
-        y_pred_logits_nosnow_flat_selection = y_pred_logits_nosnow_flat[::1000]
+        y_pred_logits_snow_flat_selection = y_pred_logits_snow_flat[::100]  # use only every 100th element, to avoid memory issues
+        y_pred_logits_nosnow_flat_selection = y_pred_logits_nosnow_flat[::100]
         
         # slice GT in same way as the predicted logits, s.t. they match afterwards
-        y_true_data_selection = y_true_data[::1000]
+        y_true_data_selection = y_true_data[::100]
 
-        # for all metrics, only log every 1000th element:
-        y_true_data = y_true_data[::1000]
-        y_pred_binary_data = y_pred_binary_data[::1000]
+        # for all metrics, only log every 100th element:
+        y_true_data = y_true_data[::100]
+        y_pred_binary_data = y_pred_binary_data[::100]
 
 
         y_true_stack_total = torch.cat((y_true_stack_total, y_true_data), 0)  # append to flattened torch tensor 
@@ -585,15 +585,15 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                 y_pred_logits_snow_flat = y_pred_logits_snow_flat[y_true_flat != 0]
                 y_pred_logits_nosnow_flat = y_pred_logits_nosnow_flat[y_true_flat != 0]
 
-                y_pred_logits_snow_flat_selection = y_pred_logits_snow_flat[::1000]  # use only every 1000th element, to avoid memory issues
-                y_pred_logits_nosnow_flat_selection = y_pred_logits_nosnow_flat[::1000]
-                
-                # slice GT in same way as the predicted logits, s.t. they match afterwards
-                y_true_data_selection = y_true_data[::1000]
+                y_pred_logits_snow_flat_selection = y_pred_logits_snow_flat[::100]  # use only every 100th element, to avoid memory issues
+                y_pred_logits_nosnow_flat_selection = y_pred_logits_nosnow_flat[::100]
 
-                # for all metrics, only log every 1000th element:
-                y_true_data = y_true_data[::1000]
-                y_pred_binary_data = y_pred_binary_data[::1000]
+                # slice GT in same way as the predicted logits, s.t. they match afterwards
+                y_true_data_selection = y_true_data[::100]
+
+                # for all metrics, only log every 100th element:
+                y_true_data = y_true_data[::100]
+                y_pred_binary_data = y_pred_binary_data[::100]
 
 
                 y_true_stack_total = torch.cat((y_true_stack_total, y_true_data), 0)  # append to flattened torch tensor 
@@ -617,7 +617,7 @@ def train_val_model(model, criterion, optimizer, scheduler, num_epochs):
                     if batch_iteration[phase]%len(dloader) == 0:
                         loss = running_loss / len(dloader)
                         print(f'batch iteration: {batch_iteration[phase]} / {len(dloader)*(epoch+1)} ... {phase} loss (avg over whole validation dataloader): {loss}')
-                        get_and_log_metrics(yt=y_true_stack_total.cpu().detach(), yt_short= y_true_stack_selection.cpu().detach(), ypred_bin=y_pred_binary_stack_total.cpu().detach(), ypred_logits=y_pred_logits_nosnow_stack_selection.cpu().detach(), ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
+                        get_and_log_metrics(yt=y_true_stack_total.cpu().detach(), yt_short=y_true_stack_selection.cpu().detach(), ypred_bin=y_pred_binary_stack_total.cpu().detach(), ypred_logits=y_pred_logits_nosnow_stack_selection.cpu().detach(), ep=epoch, batch_it_loss=loss, ph=phase, bi=batch_iteration[phase])
                         # as we're in last loop for validation, running_loss will be set to 0 anyways (changing the phase back to train)
 
             if phase == 'train':  # at end of epoch (training, could also be end of validation)
