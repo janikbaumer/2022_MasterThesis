@@ -91,6 +91,7 @@ y_baseline_stack_total = torch.Tensor().to('cuda')
 y_true_flat_all = {}
 
 for idx, (x, y) in enumerate(dloader_test):
+    y[y==-9999] = 0  # if y contains -9999, 1, 2 instead of 0, 1, 2
     y_true_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
 
     y_true_flat_all[idx] = y_true_flat 
@@ -104,7 +105,7 @@ for idx, (x, y) in enumerate(dloader_test):
 
 for idx, (x, y) in enumerate(dloader_baseline):
     y_baseline_flat = y.flatten()  # contains 0 (nodata), 1 (snow), 2 (nosnow)
-
+    
     y_baseline_data = y_baseline_flat[y_true_flat_all[idx] != 0]  # contains 1, 2
     y_baseline_data[y_baseline_data==1] = 0  # convert ones to zeros
     y_baseline_data[y_baseline_data==2] = 1  # convert twos to ones
