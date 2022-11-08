@@ -131,7 +131,7 @@ def data_augmentation(tensor_img_lbl, augm_pipeline, gblur, norm, coljit):
 
 def get_full_resolution_label(image, label):
     """
-    should return 4000, 6000 label, where missing values were filled up with 3 (no data),
+    should return 4000, 6000 label, where missing values were filled up with 0 (no data),
     values are filled in at correct places (depending on affine transformation)
     """
     x_topleft, y_topleft = label.transform * (0, 0)  # to get x,y bottomright: label.transform * (label.width, label.height)
@@ -303,7 +303,10 @@ class DischmaSet_segmentation():
             with rasterio.open(label_path) as src:
                 image = rasterio.open(img_path)
                 # in case lbl is not 6000x4000, fill up with zeros correctly 
-                lbl = get_full_resolution_label(image, src)
+                if src.shape != (4000, 6000):
+                    lbl = get_full_resolution_label(image, src)
+                else:
+                    lbl = src.read()
                 # lbl = src.read()
 
             lbl[lbl==3] = 2
