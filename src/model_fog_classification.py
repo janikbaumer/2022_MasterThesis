@@ -710,10 +710,15 @@ if not LOAD_MODEL:
     train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
 
 elif STATIONS_CAM_LST == ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']:  # if trained on all, set optimal threshold to value that was found there
-    OPTIMAL_THRESHOLD = 0.5857  # experiment done with train on all, test on BB1, wandb run 644-all-BB1 (start time: August 20th, 2022 at 2:10:21 am, Duration: 2d 4h 35m 53s)
+    # OPTIMAL_THRESHOLD = 0.5857  # experiment done with train on all, test on BB1, wandb run 644-all-BB1 (start time: August 20th, 2022 at 2:10:21 am, Duration: 2d 4h 35m 53s)
+    OPTIMAL_THRESHOLD = 0.3559  # run 699
 
 elif STATIONS_CAM_LST == ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Sattel_1', 'Sattel_2', 'Stillberg_1', 'Stillberg_2']:  # if trained on 10 cameras (all except Lu2, Sa3, St3)
     OPTIMAL_THRESHOLD = 0.653  # experiment done with train on 10, eval on 3, wandb run 645-transfer-10_3-final (start time: Augutst 21th, 2022 at 2:05:47 am, Duration: 1d 10h 51m 48s)
+    OPTIMAL_THRESHOLD = 0.7625  # run 698
+
+elif STATIONS_CAM_LST == ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Stillberg_1', 'Stillberg_2']:  # if trained on 10 cameras (all except GT3, Sa3, St3)
+    OPTIMAL_THRESHOLD = 0.5155  # 719, without GT3, Sa3, St3
 
 test_model(model=model)
 
