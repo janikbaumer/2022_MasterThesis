@@ -208,6 +208,17 @@ def get_and_log_metrics(yt, yt_short, ypred_bin, ypred_logits, ep, batch_it_loss
 
             })
 
+            print(f'{ph}/threshold_standard/accuracy', acc_std)
+            print(f'{ph}/threshold_standard/precision', prec_std)
+            print(f'{ph}/threshold_standard/recall', rec_std)
+            print(f'{ph}/threshold_standard/F1-score', f1_std)
+
+            print(f'{ph}/threshold_optimal/accuracy', acc_optimal)
+            print(f'{ph}/threshold_optimal/precision', prec_optimal)
+            print(f'{ph}/threshold_optimal/recall', rec_optimal)
+            print(f'{ph}/threshold_optimal/f1-score', f1_optimal)
+            print(f'{ph}/threshold_optimal/threshold_opt', OPTIMAL_THRESHOLD)
+
 
 '''def get_and_log_metrics(yt, ypred, ep, batch_it_loss, ph, bi=0):
     """
@@ -268,7 +279,7 @@ def test_model(model):
 
     for x, y in dloader:
         batch_iteration[phase] += 1
-        
+        y[y==-9999] = 0
         # move to CPU (due to memory issues on GPU)
         x = x.to(device)
         y = y.to(device)
@@ -325,14 +336,15 @@ def test_model(model):
         y_pred_plot[y_pred_plot == 0] = 1
         y_pred_plot[y_true_plot == 0] = 0
 
-
+        y_error = y_pred_plot.clone()  # 
+        y_error[y_pred_plot != y_true_plot] = 3  # red
 
         x_denormalized = denormalize_fct(x)
-        matplotlib.image.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_y_pred_batchit_{batch_iteration[phase]}_cmap.png', y_pred_plot.cpu().detach(), cmap=cmap_true)
-        matplotlib.image.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_y_true_batchit_{batch_iteration[phase]}_cmap.png', y_true_plot.cpu().detach(), cmap=cmap_true)
-        # matplotlib.image.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_error_batchit_{batch_iteration[phase]}_cmap.png', error_image[0].cpu().detach(), cmap=cmap_error)        
-        plt.imsave(f'segmentation_visualizations/testing/{TEST_ON_DSET_LST}_full_x_denorm_batchit_{batch_iteration[phase]}.png', np.transpose(x_denormalized[0].cpu().detach().numpy(),(1,2,0)))
-
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/{STATIONS_CAM_LST}_{TEST_ON_DSET_LST}_full_y_pred_batchit_{batch_iteration[phase]}_cmap.png', y_pred_plot.cpu().detach(), cmap=cmap_true)
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/{STATIONS_CAM_LST}_{TEST_ON_DSET_LST}_full_y_true_batchit_{batch_iteration[phase]}_cmap.png', y_true_plot.cpu().detach(), cmap=cmap_true)
+        matplotlib.image.imsave(f'segmentation_visualizations/testing/{STATIONS_CAM_LST}_{TEST_ON_DSET_LST}_full_y_error_batchit_{batch_iteration[phase]}_cmap.png', y_error.cpu().detach(), cmap=cmap_error)        
+        plt.imsave(f'segmentation_visualizations/testing/{STATIONS_CAM_LST}_{TEST_ON_DSET_LST}_full_x_denorm_batchit_{batch_iteration[phase]}.png', np.transpose(x_denormalized[0].cpu().detach().numpy(),(1,2,0)))
+        print('test images saved.')
 
         """
         plt.imsave(f'segmentation_pred_on_testset/large_patches/full_y_pred_batchit_{batch_iteration[phase]}.png', y_pred_binary_data[0].cpu().detach())
@@ -710,13 +722,15 @@ PATH_MODEL = f'models_segmentation/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNI
 
 #PATH_LOAD_MODEL = f'final_models_classification_v01/{STATIONS_CAM_LST}_bs_{BATCH_SIZE}_LR_{LEARNING_RATE}_epochs_{EPOCHS}_weighted_{WEIGHTED}_lr_sched_{LR_SCHEDULER}'
 PATH_LOAD_MODEL = PATH_MODEL
-LOAD_MODEL = False
+LOAD_MODEL = True
 
 LOG_EVERY = 20
 
 clist_pred = [(0, 'white'), (1, 'green')]
-clist_true = [(0, 'red'), (1./2., 'white'), (2./2., 'green')]
-clist_error = [(0, 'white'), (1./2., 'orange'), (2./2., 'blue')]
+clist_true = [(0, 'black'), (1./2., 'white'), (2./2., 'green')]
+
+clist_error = [(0, 'black'), (1./3., 'white'), (2./3., 'green'), (3./3., 'red')]
+
 
 cmap_pred = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_pred)
 cmap_true = matplotlib.colors.LinearSegmentedColormap.from_list('name', clist_true)
@@ -830,6 +844,29 @@ print('start training / validation...')
 if not LOAD_MODEL:
     train_val_model(model=model, criterion=criterion, optimizer=optimizer, scheduler=exp_lr_scheduler, num_epochs=EPOCHS)
     print('optimal threshold (to be used for test set): ', OPTIMAL_THRESHOLD)
+
+elif STATIONS_CAM_LST == ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Luksch_2', 'Sattel_1', 'Sattel_2', 'Sattel_3', 'Stillberg_1', 'Stillberg_2', 'Stillberg_3']:  # if trained on all, set optimal threshold to value that was found there
+    OPTIMAL_THRESHOLD = 0.7095595  # experiment done with train on all, test on BB1, wandb run 644-all-BB1 (start time: August 20th, 2022 at 2:10:21 am, Duration: 2d 4h 35m 53s)
+elif STATIONS_CAM_LST == ['Luksch_1']:
+    OPTIMAL_THRESHOLD = 0.6875477  # wandb run 319
+elif STATIONS_CAM_LST == ['Luksch_2']:
+    OPTIMAL_THRESHOLD = 0.69511884  # run 320
+elif STATIONS_CAM_LST == ['Giementaelli_1']:
+    OPTIMAL_THRESHOLD = 0.609829  # run 321
+elif STATIONS_CAM_LST == ['Sattel_1']:
+    OPTIMAL_THRESHOLD = 0.4836174  # run 330
+elif STATIONS_CAM_LST == ['Buelenberg_2']:
+    OPTIMAL_THRESHOLD = 0.5943 # 0.7093852  # run 366
+elif STATIONS_CAM_LST == ['Sattel_1']:
+    OPTIMAL_THRESHOLD = 0.5239678  # run 362
+elif STATIONS_CAM_LST == ['Sattel_3']:
+    OPTIMAL_THRESHOLD = 0.40383688  # run 358
+elif STATIONS_CAM_LST == ['Stillberg_3']:
+    OPTIMAL_THRESHOLD = 0.4347513  # run 361
+elif STATIONS_CAM_LST == ['Stillberg_2']:
+    OPTIMAL_THRESHOLD = 0.7703  # run 369
+elif STATIONS_CAM_LST == ['Buelenberg_1', 'Buelenberg_2', 'Giementaelli_1', 'Giementaelli_2', 'Giementaelli_3', 'Luksch_1', 'Sattel_1', 'Sattel_2', 'Stillberg_1', 'Stillberg_2']:
+    OPTIMAL_THRESHOLD = 0.70893806  # run 375
 
 print('start testing model...')
 
